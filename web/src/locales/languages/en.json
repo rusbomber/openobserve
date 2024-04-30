@@ -54,7 +54,9 @@
     "expand": "Expand",
     "date": "Date",
     "description": "Description",
-    "cancelChanges": "Cancel Changes"
+    "cancelChanges": "Cancel Changes",
+    "url": "URL",
+    "send": "Send"
   },
   "search": {
     "selectIndex": "Select Stream First",
@@ -141,7 +143,8 @@
     "settings": "Management",
     "iam": "IAM",
     "report": "Reports",
-    "pipeline": "Pipelines"
+    "pipeline": "Pipelines",
+    "synthetics": "Synthetics"
   },
   "rum": {
     "title": "Real User Monitoring",
@@ -865,5 +868,9 @@
     "cancelQuery": "Cancel Query",
     "queryRange": "Query Range",
     "refreshQuery": "Refresh Query"
+  },
+  "synthetics": {
+    "header": "Synthetics",
+    "requestType": "Request Type"
   }
 }

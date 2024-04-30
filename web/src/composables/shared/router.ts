@@ -295,6 +295,17 @@ const useRoutes = () => {
       ],
     },
     {
+      path: "synthetics",
+      name: "synthetics",
+      component: SyntheticMonitoring,
+      meta: {
+        keepAlive: true,
+      },
+      beforeEnter(to: any, from: any, next: any) {
+        routeGuard(to, from, next);
+      },
+    },
+    {
       path: "rum",
       name: "RUM",
       component: RealUserMonitoring,
@@ -393,17 +404,6 @@ const useRoutes = () => {
               },
             },
           ],
-        },
-        {
-          path: "syntehtic-monitoring",
-          name: "SyntheticMonitoring",
-          component: SyntheticMonitoring,
-          meta: {
-            keepAlive: true,
-          },
-          beforeEnter(to: any, from: any, next: any) {
-            routeGuard(to, from, next);
-          },
         },
       ],
     },
