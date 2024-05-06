@@ -209,15 +209,11 @@ color="primary" size="md" />
 import {
   defineComponent,
   ref,
-  onDeactivated,
   onActivated,
   computed,
-  onMounted,
   nextTick,
   onBeforeMount,
-  onBeforeUnmount,
   watch,
-  onUnmounted,
 } from "vue";
 import { useQuasar } from "quasar";
 import { useStore } from "vuex";
@@ -228,10 +224,8 @@ import SearchBar from "./SearchBar.vue";
 import IndexList from "./IndexList.vue";
 import SearchResult from "./SearchResult.vue";
 import useLogs from "@/composables/useLogs";
-import { deepKeys, byString } from "@/utils/json";
 import { Parser } from "node-sql-parser/build/mysql";
 
-import { b64DecodeUnicode } from "@/utils/zincutils";
 import segment from "@/services/segment_analytics";
 import config from "@/aws-exports";
 import { verifyOrganizationStatus } from "@/utils/zincutils";
