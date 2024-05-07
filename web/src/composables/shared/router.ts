@@ -62,6 +62,8 @@ const StreamRouting = () => import("@/components/functions/StreamRouting.vue");
 const PipelineEditor = () => import("@/components/pipeline/PipelineEditor.vue");
 const PipelinesList = () => import("@/components/pipeline/PipelinesList.vue");
 
+const ApiTestConfig = () => import("@/components/synthetics/ApiTestConfig.vue");
+
 import { routeGuard } from "@/utils/zincutils";
 import useIngestionRoutes from "./useIngestionRoutes";
 import useIamRoutes from "./useIamRoutes";
@@ -304,6 +306,19 @@ const useRoutes = () => {
       beforeEnter(to: any, from: any, next: any) {
         routeGuard(to, from, next);
       },
+      children: [
+        {
+          path: "edit",
+          name: "editSyntheticsTest",
+          component: ApiTestConfig,
+          meta: {
+            keepAlive: true,
+          },
+          beforeEnter(to: any, from: any, next: any) {
+            routeGuard(to, from, next);
+          },
+        },
+      ],
     },
     {
       path: "rum",
