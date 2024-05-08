@@ -647,6 +647,10 @@ pub struct Common {
     pub schema_cache_compress_enabled: bool,
     #[env_config(name = "ZO_SKIP_FORMAT_BULK_STREAM_NAME", default = false)]
     pub skip_formatting_bulk_stream_name: bool,
+    #[env_config(name = "ZO_SCHEMA_MEMTABLE_REFRESH_INTERVAL", default = 300)]
+    pub schema_memtable_refresh_interval: i64,
+    #[env_config(name = "ZO_SCHEMA_MEMTABLE_NAME", default = "_schema_versions")]
+    pub schema_memtable_name: String,
 }
 
 #[derive(EnvConfig)]

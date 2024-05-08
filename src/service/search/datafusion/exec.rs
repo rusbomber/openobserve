@@ -57,7 +57,10 @@ use regex::Regex;
 use super::{storage::file_list, transform_udf::get_all_transform};
 use crate::{
     common::meta::functions::VRLResultResolver,
-    service::search::{datafusion::rewrite, sql::Sql, RE_SELECT_WILDCARD},
+    service::{
+        schema_source::InMemorySchemaDS,
+        search::{datafusion::rewrite, sql::Sql, RE_SELECT_WILDCARD},
+    },
 };
 
 const AGGREGATE_UDF_LIST: [&str; 7] = [
@@ -1456,6 +1459,20 @@ fn filter_schema_null_fields(schema: &mut Schema) {
             .collect::<Vec<_>>();
         *schema = Schema::new(fields.to_vec());
     }
+}
+
+pub async fn exec_schema_ds(sql: &str) -> Result<Vec<RecordBatch>> {
+    let data_source = InMemorySchemaDS::load().await;
+    let ctx = SessionContext::new();
+    ctx.register_table(
+        CONFIG.common.schema_memtable_name.to_owned(),
+        Arc::new(data_source),
+    )?;
+
+    let df = ctx.sql(sql).await?;
+    let results = df.collect().await?;
+
+    Ok(results)
 }
 
 #[cfg(test)]

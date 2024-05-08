@@ -37,6 +37,7 @@ pub mod organization;
 pub mod pipelines;
 pub mod promql;
 pub mod schema;
+pub mod schema_source;
 pub mod search;
 pub mod session;
 pub mod stream;

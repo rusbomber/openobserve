@@ -122,15 +122,25 @@ pub async fn search(
     req.stream_type = stream_type.to_string();
 
     let res = {
-        #[cfg(feature = "enterprise")]
-        if O2_CONFIG.super_cluster.enabled && !local_cluster_search {
-            cluster::super_cluster::search(req, req_regions, req_clusters).await
+        let meta = sql::Sql::new(&req).await?;
+        if CONFIG.common.schema_memtable_name.eq(&meta.stream_name) {
+            cluster::http::search_schema_ds(req).await?
         } else {
-            cluster::http::search(req).await
-        }
-        #[cfg(not(feature = "enterprise"))]
-        {
-            cluster::http::search(req).await
+            #[cfg(feature = "enterprise")]
+            if O2_CONFIG.super_cluster.enabled && !local_cluster_search {
+                cluster::super_cluster::search(req, req_regions, req_clusters).await
+            } else {
+                #[cfg(feature = "enterprise")]
+                if O2_CONFIG.super_cluster.enabled && !local_cluster_search {
+                    cluster::super_cluster::search(req, req_clusters).await
+                } else {
+                    cluster::http::search(req).await
+                }
+                #[cfg(not(feature = "enterprise"))]
+                {
+                    cluster::http::search(req).await
+                }
+            }
         }
     };
 

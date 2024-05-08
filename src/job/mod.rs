@@ -230,6 +230,30 @@ pub async fn init() -> Result<(), anyhow::Error> {
             .await
             .expect("syslog server run failed");
     }
+    init_schema_memtable().await?;
+
+    Ok(())
+}
+
+async fn init_schema_memtable() -> datafusion::error::Result<()> {
+    use std::sync::Arc;
+
+    use datafusion::prelude::SessionContext;
+
+    use crate::service::schema_source::InMemorySchemaDS;
+
+    let ctx = SessionContext::new();
+
+    let data_source = InMemorySchemaDS::load().await;
+    ctx.register_table("test", Arc::new(data_source))?;
+
+    let df = ctx.sql("SELECT * FROM test").await?;
+    let results = df.collect().await?;
+
+    // Print results
+    for batch in results {
+        log::info!("{:?}", batch);
+    }
 
     Ok(())
 }

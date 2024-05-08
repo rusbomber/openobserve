@@ -211,3 +211,32 @@ pub async fn search(mut req: cluster_rpc::SearchRequest) -> Result<search::Respo
 
     Ok(result)
 }
+
+pub async fn search_schema_ds(mut req: cluster_rpc::SearchRequest) -> Result<search::Response> {
+    let query_type = req.query.as_ref().unwrap().query_type.to_lowercase();
+    let sql = super::super::sql::Sql::new(&req).await?;
+    use ::datafusion::arrow::json as arrow_json;
+
+    let mut result = search::Response::new(sql.meta.offset, sql.meta.limit);
+
+    let batches_query = super::super::datafusion::exec::exec_schema_ds(&sql.origin_sql).await?;
+    let batches_query_ref: Vec<&RecordBatch> = batches_query.iter().collect();
+    let schema = batches_query_ref[0].schema();
+    let json_rows = match arrow_json::writer::record_batches_to_json_rows(&batches_query_ref) {
+        Ok(res) => res,
+        Err(err) => {
+            return Err(Error::ErrorCode(ErrorCodes::ServerInternalError(
+                err.to_string(),
+            )));
+        }
+    };
+    let sources: Vec<json::Value> = json_rows.into_iter().map(json::Value::Object).collect();
+
+    // handle query type: json, metrics, table
+    if query_type == "table" {
+        (result.columns, sources) = super::handle_table_response(schema, sources);
+    } else if query_type == "metrics" {
+        sources = super::handle_metrics_response(sources);
+    }
+    Ok(result)
+}
