@@ -32,10 +32,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         >
           <q-icon name="arrow_back_ios_new" size="14px" />
         </div>
-        <div v-if="beingUpdated" class="text-h6" data-test="add-alert-title">
+        <div v-if="beingUpdated"
+class="text-h6" data-test="add-alert-title">
           {{ t("alerts.updateTitle") }}
         </div>
-        <div v-else class="text-h6" data-test="add-alert-title">
+        <div v-else
+class="text-h6" data-test="add-alert-title">
           {{ t("alerts.addTitle") }}
         </div>
       </div>
@@ -53,7 +55,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     >
       <div class="row justify-start items-start" style="width: 1024px">
         <div style="width: calc(100% - 401px)">
-          <q-form class="add-alert-form" ref="addAlertForm" @submit="onSubmit">
+          <q-form class="add-alert-form"
+ref="addAlertForm" @submit="onSubmit">
             <div
               class="flex justify-start items-center q-pb-sm q-col-gutter-md flex-wrap"
             >
@@ -436,8 +439,6 @@ import alertsService from "../../services/alerts";
 import { useI18n } from "vue-i18n";
 import { useStore } from "vuex";
 import { useQuasar, debounce } from "quasar";
-import streamService from "../../services/stream";
-import { Parser } from "node-sql-parser/build/mysql";
 import segment from "../../services/segment_analytics";
 import ScheduledAlert from "./ScheduledAlert.vue";
 import RealTimeAlert from "./RealTimeAlert.vue";
@@ -448,6 +449,7 @@ import { useRouter } from "vue-router";
 import PreviewAlert from "./PreviewAlert.vue";
 import useStreams from "@/composables/useStreams";
 import { outlinedInfo } from "@quasar/extras/material-icons-outlined";
+import useLazyLoad from "@/composables/useLazyLoad";
 
 const defaultValue: any = () => {
   return {
@@ -613,7 +615,12 @@ export default defineComponent({
     const editorData = ref("");
     const prefixCode = ref("");
     const suffixCode = ref("");
-    let parser = new Parser();
+    const { loadNodeSQLParser } = useLazyLoad();
+    let parser: any = null;
+    (async () => {
+      const sqlParser: any = await loadNodeSQLParser();
+      parser = new sqlParser();
+    })();
 
     onMounted(async () => {});
 

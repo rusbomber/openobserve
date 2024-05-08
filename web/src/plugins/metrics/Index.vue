@@ -259,7 +259,7 @@ import { useRouter } from "vue-router";
 
 import MetricList from "./MetricList.vue";
 import useMetrics from "@/composables/useMetrics";
-import { Parser } from "node-sql-parser/build/mysql";
+import useLazyLoad from "@/composables/useLazyLoad";
 
 import streamService from "@/services/stream";
 import { b64DecodeUnicode, b64EncodeUnicode } from "@/utils/zincutils";
@@ -320,7 +320,12 @@ export default defineComponent({
     let refreshIntervalID = 0;
     const searchResultRef = ref(null);
     const searchBarRef = ref(null);
-    const parser = new Parser();
+    const { loadNodeSQLParser } = useLazyLoad();
+    let parser: any = null;
+    (async () => {
+      const sqlParser: any = await loadNodeSQLParser();
+      parser = new sqlParser();
+    })();
     const metricsQueryEditorRef = ref(null);
     const { dashboardPanelData, resetDashboardPanelData } =
       useMetricsExplorer();

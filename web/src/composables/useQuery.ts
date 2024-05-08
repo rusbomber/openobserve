@@ -1,4 +1,4 @@
-import { Parser } from "node-sql-parser/build/mysql";
+import useLazyLoad from "@/composables/useLazyLoad";
 import { useStore } from "vuex";
 import useNotifications from "@/composables/useNotifications";
 import { b64EncodeUnicode } from "@/utils/zincutils";
@@ -63,7 +63,12 @@ const getTimeInterval = (start_time: number, end_time: number) => {
 };
 
 const useQuery = () => {
-  const parser = new Parser();
+  const { loadNodeSQLParser } = useLazyLoad();
+  let parser: any = null;
+  (async () => {
+    const sqlParser: any = await loadNodeSQLParser();
+    parser = new sqlParser();
+  })();
   const store = useStore();
   const { showErrorNotification } = useNotifications();
   const parseQuery = (query: string, sqlMode = false) => {

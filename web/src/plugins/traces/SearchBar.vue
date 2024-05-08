@@ -167,7 +167,7 @@ import useTraces from "@/composables/useTraces";
 import QueryEditor from "@/components/QueryEditor.vue";
 import SyntaxGuide from "./SyntaxGuide.vue";
 
-import { Parser } from "node-sql-parser/build/mysql";
+import useLazyLoad from "@/composables/useLazyLoad";
 import segment from "@/services/segment_analytics";
 import config from "@/aws-exports";
 import useSqlSuggestions from "@/composables/useSuggestions";
@@ -217,7 +217,12 @@ export default defineComponent({
 
     const showWarningDialog = ref(false);
 
-    const parser = new Parser();
+    const { loadNodeSQLParser } = useLazyLoad();
+    let parser: any = null;
+    (async () => {
+      const sqlParser: any = await loadNodeSQLParser();
+      parser = new sqlParser();
+    })();
     let streamName = "";
     const dateTimeRef = ref(null);
 

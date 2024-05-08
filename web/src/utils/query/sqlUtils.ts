@@ -1,20 +1,25 @@
-import { Parser } from "node-sql-parser/build/mysql";
+import useLazyLoad from "@/composables/useLazyLoad";
 
 export const addLabelsToSQlQuery = (originalQuery: any, labels: any) => {
-    let dummyQuery = "select * from 'default'";
-    labels.forEach((label: any) => {
-      dummyQuery = addLabelToSQlQuery(
-        dummyQuery,
-        label.name,
-        label.value,
-        label.operator
-      );
-    });
+  let dummyQuery = "select * from 'default'";
+  labels.forEach((label: any) => {
+    dummyQuery = addLabelToSQlQuery(
+      dummyQuery,
+      label.name,
+      label.value,
+      label.operator
+    );
+  });
 
-    const parser = new Parser();
-    const astOfOriginalQuery: any = parser.astify(originalQuery);
-    const astOfDummy: any = parser.astify(dummyQuery);
-  
+  const { loadNodeSQLParser } = useLazyLoad();
+  let parser: any = null;
+  (async () => {
+    const sqlParser: any = await loadNodeSQLParser();
+    parser = new sqlParser();
+  })();
+  const astOfOriginalQuery: any = parser.astify(originalQuery);
+  const astOfDummy: any = parser.astify(dummyQuery);
+
   // if ast already has a where clause
   if (astOfOriginalQuery.where) {
     const newWhereClause = {
@@ -45,7 +50,6 @@ export const addLabelsToSQlQuery = (originalQuery: any, labels: any) => {
     const quotedSql = sql.replace(/`/g, '"');
     return quotedSql;
   }
- 
 };
 
 export const addLabelToSQlQuery = (
@@ -54,8 +58,13 @@ export const addLabelToSQlQuery = (
   value: any,
   operator: any
 ) => {
-  const parser = new Parser();
-  const ast: any = parser.astify(originalQuery)
+  const { loadNodeSQLParser } = useLazyLoad();
+  let parser: any = null;
+  (async () => {
+    const sqlParser: any = await loadNodeSQLParser();
+    parser = new sqlParser();
+  })();
+  const ast: any = parser.astify(originalQuery);
 
   let query = "";
   if (!ast.where) {
@@ -116,16 +125,21 @@ export const addLabelToSQlQuery = (
 
     query = quotedSql;
   }
- 
+
   return query;
 };
 
 export const getStreamFromQuery = (query: any) => {
-  const parser = new Parser();
-  try{
+  const { loadNodeSQLParser } = useLazyLoad();
+  let parser: any = null;
+  (async () => {
+    const sqlParser: any = await loadNodeSQLParser();
+    parser = new sqlParser();
+  })();
+  try {
     const ast: any = parser.astify(query);
-    return ast?.from[0]?.table || '';
-  } catch(e: any) {
+    return ast?.from[0]?.table || "";
+  } catch (e: any) {
     return "";
   }
-} 
+};

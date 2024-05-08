@@ -129,7 +129,7 @@ import PanelSchemaRenderer from "../../../components/dashboards/PanelSchemaRende
 import AutoRefreshInterval from "@/components/AutoRefreshInterval.vue";
 import { onActivated } from "vue";
 import { parseDuration } from "@/utils/date";
-import { Parser } from "node-sql-parser/build/mysql";
+import useLazyLoad from "@/composables/useLazyLoad";
 import HistogramIntervalDropDown from "@/components/dashboards/addPanel/HistogramIntervalDropDown.vue";
 
 export default defineComponent({
@@ -196,12 +196,18 @@ export default defineComponent({
     // array of histogram fields
     let histogramFields: any = ref([]);
 
+    const { loadNodeSQLParser } = useLazyLoad();
+    let parser: any = null;
+    (async () => {
+      const sqlParser: any = await loadNodeSQLParser();
+      parser = new sqlParser();
+    })();
+
     watch(
       () => histogramInterval.value,
       () => {
         // replace the histogram interval in the query by finding histogram aggregation
         dashboardPanelData?.data?.queries?.forEach((query: any) => {
-          const parser = new Parser();
           const ast: any = parser.astify(query?.query);
 
           // Iterate over the columns to check if the column is histogram

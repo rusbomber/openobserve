@@ -153,7 +153,6 @@ export default defineConfig({
           "@openobserve/rrweb-player",
         ],
         "vgl": ["vue3-grid-layout"],
-        "o2cs-nsp": ["node-sql-parser/build/mysql"],
         "o2cs-date-fns": ["date-fns", "date-fns-tz"],
         "o2cs-map": ["@joakimono/echarts-extension-leaflet"],
       },

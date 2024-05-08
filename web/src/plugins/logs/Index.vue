@@ -138,7 +138,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                     data-test="logs-search-no-stream-selected-text"
                     class="text-center col-10 q-mx-auto"
                   >
-                    <q-icon name="info" color="primary" size="md" /> Select a
+                    <q-icon name="info"
+color="primary" size="md" /> Select a
                     stream and press 'Run query' to continue. Additionally, you
                     can apply additional filters and adjust the date range to
                     enhance search.
@@ -157,7 +158,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                     data-test="logs-search-error-message"
                     class="text-center q-mx-auto col-10"
                   >
-                    <q-icon name="info" color="primary" size="md" />
+                    <q-icon name="info"
+color="primary" size="md" />
                     {{ t("search.noRecordFound") }}
                   </h6>
                 </div>
@@ -174,7 +176,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                     data-test="logs-search-error-message"
                     class="text-center q-mx-auto col-10"
                   >
-                    <q-icon name="info" color="primary" size="md" />
+                    <q-icon name="info"
+color="primary" size="md" />
                     {{ t("search.applySearch") }}
                   </h6>
                 </div>
@@ -221,7 +224,7 @@ import SearchBar from "./SearchBar.vue";
 import IndexList from "./IndexList.vue";
 import SearchResult from "./SearchResult.vue";
 import useLogs from "@/composables/useLogs";
-import { Parser } from "node-sql-parser/build/mysql";
+import useLazyLoad from "@/composables/useLazyLoad";
 
 import segment from "@/services/segment_analytics";
 import config from "@/aws-exports";
@@ -370,7 +373,12 @@ export default defineComponent({
     } = useLogs();
     const searchResultRef = ref(null);
     const searchBarRef = ref(null);
-    const parser = new Parser();
+    const { loadNodeSQLParser } = useLazyLoad();
+    let parser: any = null;
+    (async () => {
+      const sqlParser: any = await loadNodeSQLParser();
+      parser = new sqlParser();
+    })();
     const expandedLogs = ref({});
 
     // function restoreUrlQueryParams() {

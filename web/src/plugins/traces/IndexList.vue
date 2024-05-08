@@ -192,7 +192,7 @@ import { outlinedAdd } from "@quasar/extras/material-icons-outlined";
 import BasicValuesFilter from "./fields-sidebar/BasicValuesFilter.vue";
 import AdvancedValuesFilter from "./fields-sidebar/AdvancedValuesFilter.vue";
 import { computed } from "vue";
-import { Parser } from "node-sql-parser/build/mysql";
+import useLazyLoad from "@/composables/useLazyLoad";
 import streamService from "@/services/stream";
 import { b64EncodeUnicode, formatLargeNumber } from "@/utils/zincutils";
 import { watch } from "vue";
@@ -215,6 +215,12 @@ export default defineComponent({
     const valuesSize = 5;
 
     const fieldValues = computed(() => searchObj.data.stream.fieldValues);
+    const { loadNodeSQLParser } = useLazyLoad();
+    let parser: any = null;
+    (async () => {
+      const sqlParser: any = await loadNodeSQLParser();
+      parser = new sqlParser();
+    })();
 
     watch(
       () => searchObj.data.stream.selectedStreamFields,
@@ -430,8 +436,6 @@ export default defineComponent({
       prevValues: string[]
     ) => {
       try {
-        const parser = new Parser();
-
         const valuesString = values
           .map((value: string) => "'" + value + "'")
           .join(",");

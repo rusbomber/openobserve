@@ -19,7 +19,7 @@ import { reactive, ref, type Ref, toRaw, nextTick } from "vue";
 import { useStore } from "vuex";
 import { useRouter } from "vue-router";
 import { cloneDeep } from "lodash-es";
-import { Parser } from "node-sql-parser/build/mysql";
+import useLazyLoad from "@/composables/useLazyLoad";
 
 import {
   useLocalLogFilterField,
@@ -193,10 +193,16 @@ const useLogs = () => {
   const { showErrorNotification } = useNotifications();
   const { getStreams, getStream } = useStreams();
   const router = useRouter();
-  const parser = new Parser();
   const fieldValues = ref();
   const initialQueryPayload: Ref<LogsQueryPayload | null> = ref(null);
   const notificationMsg = ref("");
+
+  const { loadNodeSQLParser } = useLazyLoad();
+  let parser: any = null;
+  (async () => {
+    const sqlParser: any = await loadNodeSQLParser();
+    parser = new sqlParser();
+  })();
 
   searchObj.organizationIdetifier = store.state.selectedOrganization.identifier;
   searchObj.meta.quickMode = store.state.zoConfig.quick_mode_enabled;

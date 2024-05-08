@@ -125,8 +125,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import {
   computed,
   defineAsyncComponent,
+  getCurrentInstance,
   defineComponent,
   onActivated,
+  onBeforeMount,
   provide,
   ref,
   watch,
@@ -160,6 +162,11 @@ export default defineComponent({
     "refresh",
     "onMovePanel",
   ],
+  // async created() {
+  //   const { GridLayout, GridItem } = await import("vue3-grid-layout");
+  //   this.$options.components["GridLayout"] = GridLayout;
+  //   this.$options.components["GridItem"] = GridItem;
+  // },
   props: {
     viewOnly: {},
     dashboardData: {},

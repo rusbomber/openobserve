@@ -157,7 +157,7 @@ import {
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import { useQuasar } from "quasar";
-import { Parser } from "node-sql-parser/build/mysql";
+import useLazyLoad from "@/composables/useLazyLoad";
 import ConfirmDialog from "../../../components/ConfirmDialog.vue";
 import QueryEditor from "../QueryEditor.vue";
 import useDashboardPanelData from "../../../composables/useDashboardPanel";
@@ -189,7 +189,12 @@ export default defineComponent({
       removeQuery,
     } = useDashboardPanelData();
     const confirmQueryModeChangeDialog = ref(false);
-    const parser = new Parser();
+    const { loadNodeSQLParser } = useLazyLoad();
+    let parser: any = null;
+    (async () => {
+      const sqlParser: any = await loadNodeSQLParser();
+      parser = new sqlParser();
+    })();
     let streamName = "";
     const { autoCompleteData, autoCompletePromqlKeywords, getSuggestions } =
       usePromqlSuggestions();

@@ -68,7 +68,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         :hide-bottom="
           searchObj.data.stream.selectedStreamFields != undefined &&
           (searchObj.data.stream.selectedStreamFields.length <= rowsPerPage ||
-          searchObj.data.stream.selectedStreamFields.length == 0)
+            searchObj.data.stream.selectedStreamFields.length == 0)
         "
       >
         <template #body-cell-name="props">
@@ -441,7 +441,7 @@ import {
   useLocalInterestingFields,
 } from "../../utils/zincutils";
 import streamService from "../../services/stream";
-import { Parser } from "node-sql-parser/build/mysql";
+import useLazyLoad from "@/composables/useLazyLoad";
 import {
   outlinedAdd,
   outlinedVisibility,
@@ -480,7 +480,12 @@ export default defineComponent({
         values: { key: string; count: string }[];
       };
     }> = ref({});
-    const parser = new Parser();
+    const { loadNodeSQLParser } = useLazyLoad();
+    let parser: any = null;
+    (async () => {
+      const sqlParser: any = await loadNodeSQLParser();
+      parser = new sqlParser();
+    })();
 
     const streamTypes = [
       { label: t("search.logs"), value: "logs" },
