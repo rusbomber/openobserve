@@ -100,7 +100,7 @@ pub async fn sql(
         && CONFIG.limit.query_optimization_num_fields > 0
         && schema.fields().len() > CONFIG.limit.query_optimization_num_fields;
     let (mut ctx, mut ctx_aggs) = if !file_type.eq(&FileType::ARROW) {
-        let ctx = register_table(
+        let ctx: SessionContext = register_table(
             session,
             schema.clone(),
             "tbl",
@@ -1462,16 +1462,16 @@ fn filter_schema_null_fields(schema: &mut Schema) {
 }
 
 pub async fn exec_schema_ds(sql: &str) -> Result<Vec<RecordBatch>> {
+    let results;
+    let ctx = prepare_datafusion_context(None, &SearchType::Normal, true)?;
     let data_source = InMemorySchemaDS::load().await;
-    let ctx = SessionContext::new();
-    ctx.register_table(
-        CONFIG.common.schema_memtable_name.to_owned(),
-        Arc::new(data_source),
-    )?;
+
+    ctx.register_table("tbl", Arc::new(data_source))?;
 
     let df = ctx.sql(sql).await?;
-    let results = df.collect().await?;
-
+    results = df.collect().await?;
+    ctx.deregister_table("tbl")?;
+    drop(ctx);
     Ok(results)
 }
 

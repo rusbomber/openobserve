@@ -212,7 +212,7 @@ pub async fn search(mut req: cluster_rpc::SearchRequest) -> Result<search::Respo
     Ok(result)
 }
 
-pub async fn search_schema_ds(mut req: cluster_rpc::SearchRequest) -> Result<search::Response> {
+pub async fn search_schema_ds(req: cluster_rpc::SearchRequest) -> Result<search::Response> {
     let query_type = req.query.as_ref().unwrap().query_type.to_lowercase();
     let sql = super::super::sql::Sql::new(&req).await?;
     use ::datafusion::arrow::json as arrow_json;
@@ -230,7 +230,7 @@ pub async fn search_schema_ds(mut req: cluster_rpc::SearchRequest) -> Result<sea
             )));
         }
     };
-    let sources: Vec<json::Value> = json_rows.into_iter().map(json::Value::Object).collect();
+    let mut sources: Vec<json::Value> = json_rows.into_iter().map(json::Value::Object).collect();
 
     // handle query type: json, metrics, table
     if query_type == "table" {

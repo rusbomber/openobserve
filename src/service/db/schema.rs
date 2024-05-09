@@ -463,6 +463,28 @@ pub async fn cache() -> Result<(), anyhow::Error> {
         let entry = schemas.entry(item_key).or_insert(Vec::new());
         entry.push((start_dt, val));
     }
+
+    // add schema
+    use arrow::datatypes::DataType;
+    let mut schema_metadata = std::collections::HashMap::new();
+    schema_metadata.insert("created_at".to_string(), "0".to_string());
+    schema_metadata.insert("start_dt".to_string(), "0".to_string());
+
+    let schema = Schema::new(vec![
+        Field::new("org", DataType::Utf8, false),
+        Field::new("stream_type", DataType::Utf8, false),
+        Field::new("stream_name", DataType::Utf8, false),
+        Field::new("num_fields", DataType::Int64, false),
+        Field::new("start_dt", DataType::Int64, false),
+        Field::new("end_dt", DataType::Int64, false),
+        Field::new("_timestamp", DataType::Int64, false),
+    ])
+    .with_metadata(schema_metadata);
+
+    schemas.insert(
+        format!("_meta/logs/{}", CONFIG.common.schema_memtable_name),
+        vec![(0, json::to_vec(&schema).unwrap().into())],
+    );
     let keys = schemas.keys().map(|k| k.to_string()).collect::<Vec<_>>();
     for item_key in keys.iter() {
         let Some(mut schema_versions) = schemas.remove(item_key) else {

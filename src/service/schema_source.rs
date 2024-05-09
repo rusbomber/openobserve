@@ -25,6 +25,7 @@ struct SchemaVersion {
     num_fields: usize,
     start_dt: i64,
     end_dt: i64,
+    _timestamp: i64,
 }
 
 /// Define a simple in-memory map as our data source
@@ -48,21 +49,23 @@ impl InMemorySchemaDS {
             }
             for (_, schema) in versions {
                 let schema_metadata = schema.metadata();
+                let start_dt = schema_metadata
+                    .get("start_dt")
+                    .unwrap_or(&"0".to_string())
+                    .parse::<i64>()
+                    .unwrap_or(0);
                 let schema_version = SchemaVersion {
                     org: keys[0].to_string(),
                     stream_type: keys[1].to_string(),
                     stream_name: keys[2].to_string(),
                     num_fields: schema.fields().len(),
-                    start_dt: schema_metadata
-                        .get("start_dt")
-                        .unwrap_or(&"0".to_string())
-                        .parse::<i64>()
-                        .unwrap_or(0),
+                    start_dt,
                     end_dt: schema_metadata
                         .get("end_dt")
                         .unwrap_or(&"0".to_string())
                         .parse::<i64>()
                         .unwrap_or(0),
+                    _timestamp: start_dt,
                 };
                 rows.push(schema_version);
             }
@@ -90,6 +93,7 @@ impl TableProvider for InMemorySchemaDS {
             Field::new("num_fields", DataType::Int32, false),
             Field::new("start_dt", DataType::Int32, false),
             Field::new("end_dt", DataType::Int32, false),
+            Field::new("_timestamp", DataType::Int32, false),
         ]);
         Arc::new(schema)
     }
@@ -134,6 +138,7 @@ impl TableProvider for InMemorySchemaDS {
             Field::new("num_fields", DataType::Int64, false),
             Field::new("start_dt", DataType::Int64, false),
             Field::new("end_dt", DataType::Int64, false),
+            Field::new("_timestamp", DataType::Int64, false),
         ]));
 
         // Create a RecordBatch
@@ -144,8 +149,9 @@ impl TableProvider for InMemorySchemaDS {
                 Arc::new(StringArray::from(stream_types)),
                 Arc::new(StringArray::from(stream_names)),
                 Arc::new(Int64Array::from(num_fields)),
-                Arc::new(Int64Array::from(start_dts)),
+                Arc::new(Int64Array::from(start_dts.clone())),
                 Arc::new(Int64Array::from(end_dts)),
+                Arc::new(Int64Array::from(start_dts)),
             ],
         )?;
 
