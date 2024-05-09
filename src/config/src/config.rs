@@ -644,6 +644,8 @@ pub struct Common {
     pub all_fields_name: String,
     #[env_config(name = "ZO_SCHEMA_CACHE_COMPRESS_ENABLED", default = false)]
     pub schema_cache_compress_enabled: bool,
+    #[env_config(name = "ZO_BULK_RESPONSE_INCLUDE_ERRORS_ONLY", default = false)]
+    pub bulk_api_response_errors_only: bool,
 }
 
 #[derive(EnvConfig)]

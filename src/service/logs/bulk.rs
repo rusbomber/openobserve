@@ -747,6 +747,9 @@ fn add_record_status(
                     stream_name,
                 ),
             );
+            if CONFIG.common.bulk_api_response_errors_only {
+                bulk_res.items.push(item.clone());
+            }
         }
         None => {
             item.insert(
@@ -755,7 +758,10 @@ fn add_record_status(
             );
         }
     }
-    bulk_res.items.push(item);
+
+    if !CONFIG.common.bulk_api_response_errors_only {
+        bulk_res.items.push(item);
+    }
 }
 
 #[cfg(test)]
