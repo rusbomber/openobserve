@@ -24,26 +24,21 @@ use super::{
 };
 
 #[derive(Serialize, Debug, Default, Deserialize, PartialEq, Clone, ToSchema)]
+#[serde(rename = "snake_case")]
 pub enum SyntheticsAlertType {
-    #[serde(rename = "email")]
     #[default]
     Email,
 }
 
 #[derive(Serialize, Debug, Default, Deserialize, PartialEq, Clone, ToSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum SyntheticsFrequencyType {
-    #[serde(rename = "once")]
     Once,
-    #[serde(rename = "seconds")]
     Seconds,
-    #[serde(rename = "minutes")]
     Minutes,
-    #[serde(rename = "hours")]
     #[default]
     Hours,
-    #[serde(rename = "days")]
     Days,
-    #[serde(rename = "cron")]
     Cron,
 }
 
@@ -60,6 +55,7 @@ pub struct SyntheticsFrequency {
     pub frequency_type: SyntheticsFrequencyType,
     /// Start time of report generation in UNIX microseconds.
     pub start: i64,
+    pub timezone: String,
     #[serde(default)]
     #[serde(rename = "timezoneOffset")]
     pub timezone_offset: i64,
@@ -72,27 +68,28 @@ impl Default for SyntheticsFrequency {
             cron: "".to_string(),
             frequency_type: Default::default(),
             start: 0,
+            timezone: "".to_string(),
             timezone_offset: 0,
         }
     }
 }
 
 #[derive(Clone, Debug, Serialize, Default, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub enum SyntheticsType {
     #[default]
     Http,
 }
 
 #[derive(Clone, Debug, Serialize, Default, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub enum HttpSyntheticsBodyType {
     #[default]
     Raw,
 }
 
 #[derive(Clone, Debug, Serialize, Default, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub enum HttpSyntheticsAuthType {
     #[default]
     Basic,
@@ -195,6 +192,7 @@ impl Default for Synthetics {
 }
 
 #[derive(Clone, Debug, Serialize, Default, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum AssertionType {
     #[default]
     Body,
