@@ -287,7 +287,7 @@ const apiConfig = ref({
       type: "body",
       value: "",
       key: "",
-      timingScope: "",
+      timing_scope: "",
       id: getUUID(),
     },
   ],

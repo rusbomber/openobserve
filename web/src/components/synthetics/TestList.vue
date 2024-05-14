@@ -153,8 +153,6 @@
     </div>
   </div>
 
-  <router-view v-else />
-
   <q-dialog v-model="showCreatePipeline" position="right" full-height maximized>
     <create-test @save="savePipeline" />
   </q-dialog>
@@ -205,20 +203,7 @@ const showCreatePipeline = ref(false);
 
 const testStatusLoadingMap: Ref<{ [key: string]: boolean }> = ref({});
 
-const tests = ref([
-  {
-    "#": 1,
-    name: "test1",
-    type: "type1",
-    domain: "domain1",
-  },
-  {
-    "#": 2,
-    name: "test2",
-    type: "type2",
-    domain: "domain2",
-  },
-]);
+const tests = ref([]);
 
 const store = useStore();
 
@@ -238,7 +223,7 @@ const perPageOptions: any = [
   { label: "100", value: 100 },
   { label: "All", value: 0 },
 ];
-const resultTotal = ref<number>(0);
+const resultTotal = computed(() => tests.value.length);
 const maxRecordToReturn = ref<number>(100);
 const selectedPerPage = ref<number>(20);
 const pagination: any = ref({
@@ -298,6 +283,7 @@ onBeforeMount(() => {
 });
 
 const createPipeline = () => {
+  console.log("createPipeline -------------------");
   showCreatePipeline.value = true;
 };
 
@@ -305,7 +291,7 @@ const gettests = () => {
   syntheticsService
     .list(store.state.selectedOrganization.identifier)
     .then((response) => {
-      tests.value = response.data.list.map((test: any, index: number) => {
+      tests.value = response.data.map((test: any, index: number) => {
         return {
           ...test,
           "#": index + 1,
@@ -384,7 +370,11 @@ const savePipeline = (data: Pipeline) => {
   });
 
   syntheticService
-    .create(store.state.selectedOrganization.identifier, data)
+    .create(store.state.selectedOrganization.identifier, {
+      ...data,
+      owner: store.state.userInfo.email,
+      lastEditedBy: store.state.userInfo.email,
+    })
     .then(() => {
       gettests();
       showCreatePipeline.value = false;

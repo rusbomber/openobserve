@@ -83,14 +83,14 @@
         <template v-for="visual in timeTabs" :key="visual.value">
           <q-btn
             :data-test="`add-report-schedule-${visual.value}-btn`"
-            :color="visual.value === selectedTimeTab ? 'primary' : ''"
-            :flat="visual.value === selectedTimeTab ? false : true"
+            :color="visual.value === timeTab ? 'primary' : ''"
+            :flat="visual.value === timeTab ? false : true"
             dense
             no-caps
             size="12px"
             class="q-px-md visual-selection-btn"
             style="padding-top: 4px; padding-bottom: 4px"
-            @click="selectedTimeTab = visual.value"
+            @click="updateTimeTab(visual.value)"
           >
             {{ visual.label }}</q-btn
           >
@@ -148,7 +148,7 @@
 
       <div
         data-test="add-report-schedule-send-later-section"
-        v-if="selectedTimeTab === 'sendLater'"
+        v-if="timeTab === 'sendLater'"
         class="flex items-center justify-start q-mt-md"
       >
         <div
@@ -280,17 +280,20 @@ const props = defineProps({
     required: true,
     default: () => ({}),
   },
+  timeTab: {
+    type: String,
+    required: true,
+    default: "sendNow",
+  },
 });
 
-const emit = defineEmits(["update:modelValue"]);
+const emit = defineEmits(["update:modelValue", "update:timeTab"]);
 
 const { t } = useI18n();
 
 const store = useStore();
 
 const cronError = ref("");
-
-const selectedTimeTab = ref("sendLater");
 
 const filteredTimezone: any = ref([]);
 
@@ -399,6 +402,10 @@ const filterColumns = (options: any[], val: String, update: Function) => {
     );
   });
   return filteredOptions;
+};
+
+const updateTimeTab = (value: string) => {
+  emit("update:timeTab", value);
 };
 </script>
 

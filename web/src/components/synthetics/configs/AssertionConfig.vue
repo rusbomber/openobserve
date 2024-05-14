@@ -129,11 +129,11 @@
           class="flex items-center justify-start"
         >
           <div
-            :data-test="`request-define-assertion-timingScope-${index}`"
+            :data-test="`request-define-assertion-timing_scope-${index}`"
             class="q-mr-sm"
           >
             <q-select
-              v-model="assertion.timingScope"
+              v-model="assertion.timing_scope"
               :options="timeScopeOptions"
               color="input-border"
               bg-color="input-bg"
@@ -230,7 +230,7 @@ interface Assertion {
   type: string;
   value: string;
   key?: string;
-  timingScope?: string;
+  timing_scope?: string;
   id: string;
 }
 
@@ -293,11 +293,11 @@ const assertionOperators = {
   body: [
     {
       label: "contains",
-      value: "contains",
+      value: "Contains",
     },
     {
       label: "does not contains",
-      value: "not_contains",
+      value: "NotContains",
     },
     {
       label: "equals",
@@ -420,7 +420,7 @@ const addAssertion = () => {
     type: "status_code",
     value: "",
     key: "",
-    timingScope: "",
+    timing_scope: "",
     id: getUUID(),
   });
 };

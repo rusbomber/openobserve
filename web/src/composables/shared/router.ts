@@ -249,16 +249,17 @@ const useRoutes = () => {
           beforeEnter(to: any, from: any, next: any) {
             routeGuard(to, from, next);
           },
-          children: [
-            {
-              path: "edit",
-              name: "pipelineEditor",
-              component: PipelineEditor,
-              beforeEnter(to: any, from: any, next: any) {
-                routeGuard(to, from, next);
-              },
-            },
-          ],
+          meta: {
+            keepAlive: true,
+          },
+        },
+        {
+          path: "edit",
+          name: "pipelineEditor",
+          component: PipelineEditor,
+          beforeEnter(to: any, from: any, next: any) {
+            routeGuard(to, from, next);
+          },
         },
       ],
     },
