@@ -892,21 +892,22 @@ export default defineComponent({
       }
     },
     async fullSQLMode(newVal) {
-      if (newVal) {
-        await nextTick();
-        this.setQuery(newVal);
-        this.updateUrlQueryParams();
-      } else {
-        this.searchObj.meta.sqlMode = false;
-        this.searchObj.data.query = "";
-        this.searchObj.data.editorValue = "";
-        if (
-          this.searchObj.loading == false &&
-          this.searchObj.shouldIgnoreWatcher == false &&
-          this.store.state.zoConfig.query_on_stream_selection == false
-        ) {
-          this.searchObj.loading = true;
-          this.getQueryData();
+      if (this.searchObj.shouldIgnoreWatcher == false) {
+        if (newVal) {
+          await nextTick();
+          this.setQuery(newVal);
+          this.updateUrlQueryParams();
+        } else {
+          this.searchObj.meta.sqlMode = false;
+          this.searchObj.data.query = "";
+          this.searchObj.data.editorValue = "";
+          if (
+            this.searchObj.loading == false &&
+            this.store.state.zoConfig.query_on_stream_selection == false
+          ) {
+            this.searchObj.loading = true;
+            this.getQueryData();
+          }
         }
       }
       // this.searchResultRef.reDrawChart();

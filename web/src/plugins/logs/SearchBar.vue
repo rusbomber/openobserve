@@ -1657,7 +1657,7 @@ export default defineComponent({
     };
 
     const applySavedView = (item) => {
-      searchObj.meta.sqlMode = false;
+      searchObj.shouldIgnoreWatcher = true;
       savedviewsService
         .getViewDetail(
           store.state.selectedOrganization.identifier,
@@ -1665,6 +1665,7 @@ export default defineComponent({
         )
         .then(async (res) => {
           if (res.status == 200) {
+            searchObj.meta.sqlMode = false;
             store.dispatch("setSavedViewFlag", true);
             const extractedObj = res.data.data;
 
@@ -1821,6 +1822,7 @@ export default defineComponent({
                 await getQueryData();
                 store.dispatch("setSavedViewFlag", false);
                 updateUrlQueryParams();
+                searchObj.shouldIgnoreWatcher = false;
               } catch (e) {
                 console.log(e);
               }
