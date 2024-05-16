@@ -333,6 +333,10 @@ pub async fn watch() -> Result<(), anyhow::Error> {
                     continue;
                 }
                 let latest_schema = latest_schema.last().unwrap();
+                if latest_schema == &Schema::empty() {
+                    log::error!("Error parsing schema, key: {}, schema is empty", item_key);
+                    continue;
+                }
                 let settings = unwrap_stream_settings(latest_schema).unwrap_or_default();
                 let mut w = STREAM_SETTINGS.write().await;
                 w.insert(item_key.to_string(), settings);
@@ -416,6 +420,7 @@ pub async fn watch() -> Result<(), anyhow::Error> {
                     // delete only one version
                     continue;
                 }
+                log::info!("Watching schema: Delete stream schema {}", item_key);
                 let mut w = STREAM_SCHEMAS.write().await;
                 w.remove(item_key);
                 drop(w);
