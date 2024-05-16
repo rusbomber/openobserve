@@ -24,6 +24,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         v-model="splitterModel"
         horizontal
       >
+      <q-btn
+      color="secondary"
+      @click="toggle"
+      :icon="$q.fullscreen.isActive ? 'fullscreen_exit' : 'fullscreen'"
+      :label="$q.fullscreen.isActive ? 'Exit Fullscreen' : 'Go Fullscreen'"
+    />
         <template v-slot:before>
           <search-bar
             data-test="logs-search-bar"
@@ -740,6 +746,7 @@ export default defineComponent({
 
     return {
       t,
+      $q,
       store,
       router,
       parser,
@@ -770,6 +777,20 @@ export default defineComponent({
       getHistogramQueryData,
       setInterestingFieldInSQLQuery,
       handleQuickModeChange,
+      toggle(e) {
+        const target = e.target.parentNode.parentNode.parentNode;
+
+        $q.fullscreen
+          .toggle(target)
+          .then(() => {
+            // success!
+          })
+          .catch((err) => {
+            alert(err);
+            // uh, oh, error!!
+            // console.error(err)
+          });
+      },
     };
   },
   computed: {
