@@ -89,7 +89,7 @@ pub async fn get_from_db(
 ) -> Result<Schema> {
     let key = mk_key(org_id, stream_type, stream_name);
     let db = infra_db::get_db().await;
-    Ok(match db.get(&key).await {
+    let ret = match db.get(&key).await {
         Err(e) => {
             if let Error::DbError(DbError::KeyNotExists(_)) = e {
                 Schema::empty()
@@ -109,7 +109,11 @@ pub async fn get_from_db(
                 json::from_slice(&v)?
             }
         }
-    })
+    };
+    if ret.fields().is_empty() {
+        log::error!("Schema is empty from db for {key}");
+    }
+    Ok(ret)
 }
 
 pub async fn get_versions(

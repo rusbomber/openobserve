@@ -564,7 +564,7 @@ async fn process_record(
     let mut trigger: TriggerAlertData = Vec::new();
     for schema_records in stream_data.data.values_mut() {
         // check schema
-        let mut timestamp = 0;
+        let mut min_ts = i64::MAX;
         let mut records: Vec<&serde_json::Map<std::string::String, serde_json::Value>> =
             schema_records
                 .records
@@ -576,9 +576,7 @@ async fn process_record(
                         .unwrap()
                         .as_i64()
                         .unwrap();
-                    if timestamp == 0 || timestamp < rec_ts {
-                        timestamp = rec_ts;
-                    };
+                    min_ts = std::cmp::min(min_ts, rec_ts);
                     rec.as_object().unwrap()
                 })
                 .collect();
@@ -588,7 +586,7 @@ async fn process_record(
             StreamType::Logs,
             stream_schema_map,
             records.clone(),
-            timestamp,
+            min_ts,
         )
         .await
         {
@@ -596,7 +594,7 @@ async fn process_record(
                 log::error!(
                     "Invalid schema start_dt detected for stream: {}, start_dt: {}",
                     stream.stream_name,
-                    timestamp
+                    min_ts
                 );
                 // discard records
                 continue;
