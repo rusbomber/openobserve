@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{collections::HashMap, io::Cursor, path::Path, sync::Arc, time::UNIX_EPOCH};
+use std::{collections::HashMap, path::Path, sync::Arc, time::UNIX_EPOCH};
 
 use arrow::{
     array::{ArrayRef, BooleanArray, Int64Array, StringArray},
@@ -40,12 +40,11 @@ use datafusion::{datasource::MemTable, prelude::*};
 use hashbrown::HashSet;
 use infra::{
     cache::{self, tmpfs},
-    schema::{get_stream_setting_bloom_filter_fields, get_stream_setting_fts_fields, SchemaCache},
+    schema::SchemaCache,
     storage,
 };
 use ingester::WAL_PARQUET_METADATA;
 use once_cell::sync::Lazy;
-use parquet::arrow::ParquetRecordBatchStreamBuilder;
 use tokio::{
     sync::{Mutex, RwLock},
     time,
@@ -56,6 +55,7 @@ use crate::{
     job::files::idx::write_to_disk,
     service::{
         db,
+        schema::generate_schema_for_defined_schema_fields,
         search::datafusion::{
             exec::merge_parquet_files, string_to_array_v2_udf::STRING_TO_ARRAY_V2_UDF,
         },
@@ -246,7 +246,7 @@ async fn move_files(
 
     // get latest schema
     let latest_schema = match infra::schema::get(&org_id, &stream_name, stream_type).await {
-        Ok(schema) => schema,
+        Ok(schema) => Arc::new(schema),
         Err(e) => {
             log::error!(
                 "[INGESTER:JOB:{thread_id}] Failed to get latest schema for stream [{}/{}/{}]: {}",
@@ -329,7 +329,7 @@ async fn move_files(
         // merge file and get the big file key
         let (new_file_name, new_file_meta, new_file_list) = match merge_files(
             thread_id,
-            &latest_schema,
+            latest_schema.clone(),
             group_schema_field_num,
             &wal_dir,
             &files_with_size,
@@ -427,7 +427,7 @@ async fn move_files(
 /// file key and merged files
 async fn merge_files(
     thread_id: usize,
-    latest_schema: &Schema,
+    latest_schema: Arc<Schema>,
     group_schema_field_num: usize,
     wal_dir: &Path,
     files_with_size: &[FileKey],
@@ -458,7 +458,6 @@ async fn merge_files(
     let mut retain_file_list = new_file_list.clone();
 
     // write parquet files into tmpfs
-    let mut file_schema = None;
     let tmp_dir = cache::tmpfs::Directory::default();
     for file in retain_file_list.iter_mut() {
         log::info!("[INGESTER:JOB:{thread_id}] merge small file: {}", &file.key);
@@ -479,17 +478,6 @@ async fn merge_files(
                 continue;
             }
         };
-        if file_schema.is_none() {
-            let schema_reader = Cursor::new(data.clone());
-            let arrow_reader = ParquetRecordBatchStreamBuilder::new(schema_reader).await?;
-            file_schema = Some(
-                arrow_reader
-                    .schema()
-                    .as_ref()
-                    .clone()
-                    .with_metadata(HashMap::new()),
-            );
-        }
         let file_size = data.len();
         file.meta.compressed_size = file_size as i64;
         tmp_dir.set(&file.key, data.into())?;
@@ -514,8 +502,21 @@ async fn merge_files(
     let file_name = columns[4].to_string();
 
     // merge files
-    let bloom_filter_fields = get_stream_setting_bloom_filter_fields(latest_schema).unwrap();
-    let full_text_search_fields = get_stream_setting_fts_fields(latest_schema).unwrap();
+    let stream_setting = infra::schema::get_settings(&org_id, &stream_name, stream_type)
+        .await
+        .unwrap_or_default();
+    let bloom_filter_fields = stream_setting.bloom_filter_fields;
+    let full_text_search_fields = stream_setting.full_text_search_keys;
+    let defined_schema_fields = stream_setting.defined_schema_fields.unwrap_or_default();
+    let schema = if !defined_schema_fields.is_empty() {
+        let latest_schema = SchemaCache::new(latest_schema.as_ref().clone());
+        let latest_schema =
+            generate_schema_for_defined_schema_fields(&latest_schema, &defined_schema_fields);
+        Arc::new(latest_schema.schema().clone())
+    } else {
+        latest_schema.clone()
+    };
+
     let mut buf = Vec::new();
     let mut fts_buf = Vec::new();
     let start = std::time::Instant::now();
@@ -545,7 +546,7 @@ async fn merge_files(
             stream_type,
             &stream_name,
             &mut buf,
-            Arc::new(file_schema.unwrap()),
+            schema.clone(),
             &bloom_filter_fields,
             &full_text_search_fields,
             in_file_meta,

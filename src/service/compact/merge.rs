@@ -15,7 +15,7 @@
 
 use std::{collections::HashMap, io::Write, sync::Arc};
 
-use ::datafusion::{arrow::datatypes::Schema, common::FileType, error::DataFusionError};
+use ::datafusion::{common::FileType, error::DataFusionError};
 use bytes::Bytes;
 use chrono::{DateTime, Datelike, Duration, TimeZone, Timelike, Utc};
 use config::{
@@ -30,7 +30,7 @@ use infra::{
     cache, dist_lock, file_list as infra_file_list,
     schema::{
         get_stream_setting_bloom_filter_fields, get_stream_setting_fts_fields,
-        unwrap_partition_time_level, unwrap_stream_settings,
+        unwrap_partition_time_level, unwrap_stream_settings, SchemaCache,
     },
     storage,
 };
@@ -39,7 +39,10 @@ use tokio::{sync::Semaphore, task::JoinHandle};
 use crate::{
     common::infra::cluster::get_node_by_uuid,
     job::files::parquet::generate_index_on_compactor,
-    service::{db, file_list, search::datafusion, stream},
+    service::{
+        db, file_list, schema::generate_schema_for_defined_schema_fields, search::datafusion,
+        stream,
+    },
 };
 
 /// compactor run steps on a stream:
@@ -97,13 +100,11 @@ pub async fn merge_by_stream(
     }
 
     // get schema
-    let mut schema = infra::schema::get(org_id, stream_name, stream_type).await?;
+    let schema = infra::schema::get(org_id, stream_name, stream_type).await?;
     let stream_settings = unwrap_stream_settings(&schema).unwrap_or_default();
     let partition_time_level =
         unwrap_partition_time_level(stream_settings.partition_time_level, stream_type);
     let stream_created = stream::stream_created(&schema).unwrap_or_default();
-    std::mem::take(&mut schema.metadata);
-    let schema = Arc::new(schema);
     if offset == 0 {
         offset = stream_created
     }
@@ -282,7 +283,6 @@ pub async fn merge_by_stream(
     for (prefix, files_with_size) in partition_files_with_size.into_iter() {
         let org_id = org_id.to_string();
         let stream_name = stream_name.to_string();
-        let schema = schema.clone();
         let permit = semaphore.clone().acquire_owned().await.unwrap();
         let task: JoinHandle<Result<(), anyhow::Error>> = tokio::task::spawn(async move {
             // sort by file size
@@ -298,7 +298,6 @@ pub async fn merge_by_stream(
                     &org_id,
                     stream_type,
                     &stream_name,
-                    schema.clone(),
                     &prefix,
                     &files_with_size,
                 )
@@ -412,7 +411,6 @@ async fn merge_files(
     org_id: &str,
     stream_type: StreamType,
     stream_name: &str,
-    schema: Arc<Schema>,
     prefix: &str,
     files_with_size: &[FileKey],
 ) -> Result<(String, FileMeta, Vec<FileKey>), anyhow::Error> {
@@ -483,6 +481,19 @@ async fn merge_files(
 
     // convert the file to the latest version of schema
     let schema_latest = infra::schema::get(org_id, stream_name, stream_type).await?;
+    let stream_setting = infra::schema::get_settings(org_id, stream_name, stream_type).await;
+    let defined_schema_fields = stream_setting
+        .and_then(|s| s.defined_schema_fields)
+        .unwrap_or_default();
+    let schema_latest = if !defined_schema_fields.is_empty() {
+        let schema_latest = SchemaCache::new(schema_latest);
+        let schema_latest =
+            generate_schema_for_defined_schema_fields(&schema_latest, &defined_schema_fields);
+        Arc::new(schema_latest.schema().clone())
+    } else {
+        Arc::new(schema_latest)
+    };
+
     let schema_versions =
         infra::schema::get_versions(org_id, stream_name, stream_type, Some((min_ts, max_ts)))
             .await?;
@@ -581,7 +592,7 @@ async fn merge_files(
         stream_type,
         stream_name,
         &mut buf,
-        schema.clone(),
+        schema_latest.clone(),
         &bloom_filter_fields,
         &full_text_search_fields,
         in_file_meta,
@@ -595,7 +606,7 @@ async fn merge_files(
             "merge_parquet_files err: {}, files: {:?}, schema: {:?}",
             e,
             files,
-            schema
+            schema_latest
         );
         DataFusionError::Plan(format!("merge_parquet_files err: {:?}", e))
     })?;
