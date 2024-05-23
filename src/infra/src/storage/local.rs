@@ -136,7 +136,11 @@ impl ObjectStore for Local {
                 .with_label_values(&[columns[1], columns[2], "get", "local"])
                 .inc_by(time);
         }
-
+        log::info!(
+            "[STORAGE] get local file: {} elapsed  {} secs",
+            file,
+            start.elapsed().as_secs_f64()
+        );
         Ok(result)
     }
 
@@ -163,6 +167,11 @@ impl ObjectStore for Local {
                 .with_label_values(&[columns[1], columns[2], "get", "local"])
                 .inc_by(time);
         }
+        log::info!(
+            "[STORAGE] get_opts local file: {} elapsed  {} secs",
+            file,
+            start.elapsed().as_secs_f64()
+        );
 
         Ok(result)
     }
@@ -190,7 +199,11 @@ impl ObjectStore for Local {
                 .with_label_values(&[columns[1], columns[2], "get", "local"])
                 .inc_by(time);
         }
-
+        log::info!(
+            "[STORAGE] get_range local file: {} elapsed  {} secs",
+            file,
+            start.elapsed().as_secs_f64()
+        );
         Ok(data)
     }
 

@@ -58,6 +58,8 @@ pub async fn search(
     timeout: u64,
 ) -> super::SearchResult {
     log::info!("[trace_id {trace_id}] search->storage: enter");
+    let start = std::time::Instant::now();
+
     let schema_latest = infra::schema::get(&sql.org_id, &sql.stream_name, stream_type)
         .await
         .map_err(|e| Error::ErrorCode(ErrorCodes::ServerInternalError(e.to_string())))?;
@@ -209,8 +211,15 @@ pub async fn search(
     }
     let select_wildcard = RE_SELECT_WILDCARD.is_match(sql.origin_sql.as_str());
 
+    log::info!(
+        "########### [trace_id {trace_id}] search->storage: Before Search time elapsed: {:?}",
+        start.elapsed()
+    );
+
     let mut tasks = Vec::new();
+    let start1 = std::time::Instant::now();
     for (ver, files) in files_group {
+        println!("#### ver: {}, files: {}", ver, files.len());
         let schema = schema_versions[ver].clone();
         let schema_dt = schema
             .metadata()
@@ -267,8 +276,23 @@ pub async fn search(
                 session.id
             )));
         }
+        // Split files into chunks of 8 if files length is greater than 8
+        let file_chunks: Vec<_> = if files.len() > 8 {
+            files.chunks(8).map(|chunk| chunk.to_vec()).collect()
+        } else {
+            vec![files]
+        };
 
-        let task = tokio::task::spawn(
+        // Spawn tasks for each chunk
+        for chunk in file_chunks {
+            println!("#### for ver {} chunk: {} ", ver, chunk.len());
+            let schema = schema.clone();
+            let sql = sql.clone();
+            let session = session.clone();
+            let diff_fields = diff_fields.clone();
+            let datafusion_span = datafusion_span.clone();
+            let schema_dt = schema_dt.clone();
+            let task = tokio::task::spawn(
             async move {
                 tokio::select! {
                     ret = exec::sql(
@@ -276,7 +300,7 @@ pub async fn search(
                         schema.clone(),
                         &diff_fields,
                         &sql,
-                        &files,
+                        &chunk,
                         None,
                         FileType::PARQUET,
                     ) => {
@@ -288,9 +312,9 @@ pub async fn search(
                                     // print the session_id, schema, sql, files
                                     let schema_version = format!("{}/{}/{}/{}", &sql.org_id, &stream_type, &sql.stream_name, schema_dt);
                                     let schema_fiels = schema.as_ref().simple_fields();
-                                    let files = files.iter().map(|f| f.key.as_str()).collect::<Vec<_>>();
+                                    let chunk = chunk.iter().map(|f| f.key.as_str()).collect::<Vec<_>>();
                                     log::error!("[trace_id {}] search->storage: schema and parquet mismatch, version: {}, schema: {:?}, files: {:?}", 
-                                        session.id, schema_version, schema_fiels, files);
+                                        session.id, schema_version, schema_fiels, chunk);
                                 }
                                 Err(err)
                             }
@@ -318,7 +342,8 @@ pub async fn search(
             .instrument(datafusion_span),
         );
 
-        tasks.push(task);
+            tasks.push(task);
+        }
     }
 
     let mut results: HashMap<String, Vec<RecordBatch>> = HashMap::new();
@@ -344,6 +369,10 @@ pub async fn search(
             }
         };
     }
+    log::info!(
+        "########### [trace_id {trace_id}] search->storage: Search Done time elaspsed: {:?}",
+        start1.elapsed()
+    );
 
     Ok((results, scan_stats))
 }

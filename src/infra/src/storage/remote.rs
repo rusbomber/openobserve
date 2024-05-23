@@ -125,8 +125,16 @@ impl ObjectStore for Remote {
                 .with_label_values(&[columns[1], columns[2], "get", "remote"])
                 .inc_by(time);
         }
-        log::debug!("[STORAGE] get remote file: {}", file);
-
+        //   let mut labels = std::collections::HashMap::new();
+        // labels.insert("organization", columns[1]);
+        // labels.insert("stream_type", columns[2]);
+        // labels.insert("method_type", "get");
+        // labels.insert("storage_type", "remote");
+        //
+        // println!(
+        // "Metric value {:?}",
+        // metrics::STORAGE_TIME.get_metric_with(&labels)
+        // );
         Ok(result)
     }
 
