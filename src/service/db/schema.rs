@@ -500,11 +500,6 @@ pub async fn cache() -> Result<(), anyhow::Error> {
         w.insert(item_key.to_string(), settings);
         drop(w);
         let mut w = STREAM_SCHEMAS_LATEST.write().await;
-        log::warn!(
-            "Caching schema: cache stream schema {}, fields num: {}",
-            item_key,
-            latest_schema.fields().len(),
-        );
         w.insert(
             item_key.to_string(),
             SchemaCache::new(latest_schema.clone()),
