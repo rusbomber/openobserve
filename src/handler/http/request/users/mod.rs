@@ -314,8 +314,8 @@ pub async fn get_auth(_req: HttpRequest) -> Result<HttpResponse, Error> {
         let mut resp = SignInResponse::default();
         if let Some(auth_header) = _req.headers().get("Authorization") {
             if let Ok(auth_header) = auth_header.to_str() {
-                if let Some((name, password)) =
-                    o2_enterprise::enterprise::dex::service::auth::get_user_from_token(auth_header)
+                if let Some((name, password, access_token, id_token)) =
+                    o2_enterprise::enterprise::dex::service::auth::get_tokens(auth_header)
                 {
                     match crate::handler::http::auth::validator::validate_user(&name, &password)
                         .await
@@ -333,15 +333,6 @@ pub async fn get_auth(_req: HttpRequest) -> Result<HttpResponse, Error> {
                     };
 
                     if resp.status {
-                        let access_token = format!(
-                            "Basic {}",
-                            base64::encode(&format!("{}:{}", &name, &password))
-                        );
-
-                        let id_token = config::utils::json::json!({
-                            "email": name,
-                            "name": name,
-                        });
                         let tokens = json::to_string(&AuthTokens {
                             access_token,
                             refresh_token: "".to_string(),
@@ -367,7 +358,7 @@ pub async fn get_auth(_req: HttpRequest) -> Result<HttpResponse, Error> {
                             CONFIG.common.web_url,
                             CONFIG.common.base_uri,
                             ID_TOKEN_HEADER,
-                            base64::encode(&id_token.to_string())
+                            base64::encode(&id_token)
                         );
                         return Ok(HttpResponse::Found()
                             .append_header((header::LOCATION, url))
