@@ -90,7 +90,10 @@ pub async fn process_token(
         for group in groups {
             let role_org = parse_dn(group.as_str().unwrap()).unwrap();
             if O2_CONFIG.openfga.map_group_to_role {
-                custom_roles.push(format_role_name(role_org.custom_role.unwrap()));
+                custom_roles.push(format_role_name(
+                    &role_org.org,
+                    role_org.custom_role.unwrap(),
+                ));
             } else {
                 source_orgs.push(UserOrg {
                     role: role_org.role,
@@ -441,12 +444,7 @@ async fn map_group_to_custom_role(user_email: &str, name: &str, custom_roles: Ve
         for existing_role in &existing_roles {
             if !custom_roles.contains(existing_role) {
                 // delete role
-                get_user_crole_removal_tuples(
-                    &O2_CONFIG.dex.default_org,
-                    user_email,
-                    existing_role,
-                    &mut remove_tuples,
-                );
+                get_user_crole_removal_tuples(user_email, existing_role, &mut remove_tuples);
             }
         }
 
@@ -487,6 +485,7 @@ async fn map_group_to_custom_role(user_email: &str, name: &str, custom_roles: Ve
 }
 
 #[cfg(feature = "enterprise")]
-fn format_role_name(role: String) -> String {
-    RE_ROLE_NAME.replace_all(&role, "_").to_string()
+fn format_role_name(org: &str, role: String) -> String {
+    let role = RE_ROLE_NAME.replace_all(&role, "_").to_string();
+    format!("{org}/{role}")
 }
