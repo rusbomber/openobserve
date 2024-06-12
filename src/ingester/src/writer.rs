@@ -14,6 +14,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{
+    hash::{DefaultHasher, Hash, Hasher},
     path::PathBuf,
     sync::{
         atomic::{AtomicI64, AtomicU64, Ordering},
@@ -23,7 +24,7 @@ use std::{
 
 use arrow_schema::Schema;
 use chrono::{Duration, Utc};
-use config::{get_config, metrics};
+use config::{get_config, metrics, STREAM_WITH_MEMTABLE_BUCKET_MAP};
 use once_cell::sync::Lazy;
 use snafu::ResultExt;
 use tokio::sync::{Mutex, RwLock};
@@ -40,9 +41,11 @@ use crate::{
 
 static WRITERS: Lazy<Vec<RwMap<WriterKey, Arc<Writer>>>> = Lazy::new(|| {
     let cfg = get_config();
-    let writer_num = if cfg.common.feature_per_thread_lock {
+    let writer_num = if cfg.limit.num_mem_tables > 0 {
+        cfg.limit.num_mem_tables + STREAM_WITH_MEMTABLE_BUCKET_MAP.len()
+    } else if cfg.common.feature_per_thread_lock {
         cfg.limit.http_worker_num
-    } else {
+    } else{  
         1
     };
     let mut writers = Vec::with_capacity(writer_num);
@@ -80,6 +83,31 @@ pub async fn get_writer(thread_id: usize, org_id: &str, stream_type: &str) -> Ar
     let w = rw
         .entry(key.clone())
         .or_insert_with(|| Arc::new(Writer::new(thread_id, key)));
+    w.clone()
+}
+
+/// Get a writer for a given org_id and stream_type
+pub async fn get_hashed_writer(
+    _thread_id: usize,
+    org_id: &str,
+    stream_type: &str,
+    stream_name: &str,
+) -> Arc<Writer> {
+    let num = get_config().limit.num_mem_tables as u64;
+    let mut hasher = DefaultHasher::new();
+    stream_name.hash(&mut hasher);
+    let hash = hasher.finish();
+    let new_thread_id =
+        if let Some(&dedicated_id) = STREAM_WITH_MEMTABLE_BUCKET_MAP.get(stream_name) {
+            dedicated_id
+        } else {
+            (hash % num) as usize
+        };
+    let key = WriterKey::new(org_id, stream_type);
+    let mut rw = WRITERS[new_thread_id].write().await;
+    let w = rw
+        .entry(key.clone())
+        .or_insert_with(|| Arc::new(Writer::new(new_thread_id, key)));
     w.clone()
 }
 
