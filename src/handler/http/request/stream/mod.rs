@@ -19,7 +19,10 @@ use std::{
 };
 
 use actix_web::{delete, get, http, put, web, HttpRequest, HttpResponse, Responder};
-use config::meta::stream::{StreamSettings, StreamType};
+use config::{
+    get_config,
+    meta::stream::{StreamSettings, StreamType},
+};
 
 use crate::{
     common::{
@@ -96,8 +99,10 @@ async fn settings(
     settings: web::Json<StreamSettings>,
     req: HttpRequest,
 ) -> Result<HttpResponse, Error> {
-    let (org_id, stream_name) = path.into_inner();
-    let stream_name = format_stream_name(&stream_name);
+    let (org_id, mut stream_name) = path.into_inner();
+    if !get_config().common.skip_formatting_bulk_stream_name {
+        stream_name = format_stream_name(&stream_name);
+    }
     let query = web::Query::<HashMap<String, String>>::from_query(req.query_string()).unwrap();
     let stream_type = match get_stream_type_from_request(&query) {
         Ok(v) => {
