@@ -849,6 +849,8 @@ pub struct Compact {
     pub data_retention_history: bool,
     #[env_config(name = "ZO_COMPACT_FAST_MODE", default = false)]
     pub fast_mode: bool,
+    #[env_config(name = "ZO_COMPACT_PRIORITY_STREAMS", help="streams name for which has high priority on compactor" default = "")]
+    pub priority_streams: String,
 }
 
 #[derive(EnvConfig)]

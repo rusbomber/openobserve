@@ -194,6 +194,21 @@ pub async fn run_merge(
         StreamType::Metadata,
         StreamType::Index,
     ];
+
+    let priority_streams = cfg
+        .compact
+        .priority_streams
+        .split(',')
+        .filter_map(|s| {
+            let s = s.trim();
+            if s.is_empty() {
+                None
+            } else {
+                Some(s.to_string())
+            }
+        })
+        .collect::<Vec<String>>();
+
     for org_id in orgs {
         // check backlist
         if !db::file_list::BLOCKED_ORGS.is_empty() && db::file_list::BLOCKED_ORGS.contains(&org_id)
@@ -201,13 +216,53 @@ pub async fn run_merge(
             continue;
         }
         for stream_type in stream_types {
-            let streams = db::schema::list_streams_from_cache(&org_id, stream_type).await;
+            let mut streams = db::schema::list_streams_from_cache(&org_id, stream_type).await;
+            for stream_name in priority_streams.iter() {
+                if streams.contains(stream_name) {
+                    // move to the front
+                    streams.retain(|x| x.ne(stream_name));
+                    streams.insert(0, stream_name.clone());
+                }
+            }
             let mut tasks = Vec::with_capacity(streams.len());
             for stream_name in streams {
+                // check if we are allowed to merge or just skip
+                if db::compact::retention::is_deleting_stream(
+                    &org_id,
+                    stream_type,
+                    &stream_name,
+                    None,
+                ) {
+                    log::warn!(
+                        "[COMPACTOR] the stream [{}/{}/{}] is deleting, just skip",
+                        &org_id,
+                        stream_type,
+                        &stream_name,
+                    );
+                    continue;
+                }
+
+                // check if the stream is in the priority list
+                if priority_streams.contains(&stream_name) {
+                    if run_merge_priority(worker_tx.clone(), &org_id, stream_type, &stream_name)
+                        .await?
+                    {
+                        log::info!(
+                            "[COMPACTOR] priotiry [{}/{}/{}] merge success, skip other streams",
+                            &org_id,
+                            stream_type,
+                            &stream_name,
+                        );
+                        break; // skip other streams
+                    } else {
+                        continue; // continue to next stream
+                    }
+                }
+
                 let Some(node) =
                     get_node_from_consistent_hash(&stream_name, &Role::Compactor).await
                 else {
-                    continue; // no compactor node
+                    continue; // not this node
                 };
                 if LOCAL_NODE_UUID.ne(&node) {
                     // Check if this node holds the stream
@@ -229,22 +284,6 @@ pub async fn run_merge(
                         .await?;
                     }
                     continue; // not this node
-                }
-
-                // check if we are allowed to merge or just skip
-                if db::compact::retention::is_deleting_stream(
-                    &org_id,
-                    stream_type,
-                    &stream_name,
-                    None,
-                ) {
-                    log::warn!(
-                        "[COMPACTOR] the stream [{}/{}/{}] is deleting, just skip",
-                        &org_id,
-                        stream_type,
-                        &stream_name,
-                    );
-                    continue;
                 }
 
                 let org_id = org_id.clone();
@@ -281,6 +320,50 @@ pub async fn run_merge(
     }
 
     Ok(())
+}
+
+async fn run_merge_priority(
+    worker_tx: mpsc::Sender<(merge::MergeSender, merge::MergeBatch)>,
+    org_id: &str,
+    stream_type: StreamType,
+    stream_name: &str,
+) -> Result<bool, anyhow::Error> {
+    if let Some((offset, node)) =
+        db::compact::files::get_offset_from_cache(&org_id, stream_type, &stream_name).await
+    {
+        // check the node is still alive
+        if !node.is_empty() && LOCAL_NODE_UUID.ne(&node) {
+            if get_node_by_uuid(&node).await.is_some() {
+                return Ok(false); // not this node
+            }
+        }
+        // set the stream to this node
+        if LOCAL_NODE_UUID.ne(&node) {
+            db::compact::files::set_offset(
+                &org_id,
+                stream_type,
+                &stream_name,
+                offset,
+                Some(&LOCAL_NODE_UUID.clone()),
+            )
+            .await?;
+        }
+    }
+
+    let worker_tx = worker_tx.clone();
+    match merge::merge_by_stream(worker_tx, &org_id, stream_type, &stream_name).await {
+        Ok(v) => Ok(v),
+        Err(e) => {
+            log::error!(
+                "[COMPACTOR] merge_by_stream [{}/{}/{}] error: {}",
+                org_id,
+                stream_type,
+                stream_name,
+                e
+            );
+            Ok(false)
+        }
+    }
 }
 
 /// compactor delay delete files run steps:

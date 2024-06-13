@@ -88,13 +88,13 @@ pub async fn merge_by_stream(
     org_id: &str,
     stream_type: StreamType,
     stream_name: &str,
-) -> Result<(), anyhow::Error> {
+) -> Result<bool, anyhow::Error> {
     let start = std::time::Instant::now();
 
     // get last compacted offset
     let (mut offset, node) = db::compact::files::get_offset(org_id, stream_type, stream_name).await;
     if !node.is_empty() && LOCAL_NODE_UUID.ne(&node) && get_node_by_uuid(&node).await.is_some() {
-        return Ok(()); // other node is processing
+        return Ok(false); // other node is processing
     }
 
     if node.is_empty() || LOCAL_NODE_UUID.ne(&node) {
@@ -105,7 +105,7 @@ pub async fn merge_by_stream(
         if !node.is_empty() && LOCAL_NODE_UUID.ne(&node) && get_node_by_uuid(&node).await.is_some()
         {
             dist_lock::unlock(&locker).await?;
-            return Ok(()); // other node is processing
+            return Ok(false); // other node is processing
         }
         // set to current node
         let ret = db::compact::files::set_offset(
@@ -131,7 +131,7 @@ pub async fn merge_by_stream(
         offset = stream_created
     }
     if offset == 0 {
-        return Ok(()); // no data
+        return Ok(false); // no data
     }
 
     log::debug!(
@@ -202,7 +202,7 @@ pub async fn merge_by_stream(
                         .unwrap()
                         * 3))
     {
-        return Ok(()); // the time is future, just wait
+        return Ok(false); // the time is future, just wait
     }
 
     // get current hour(day) all files
@@ -285,7 +285,7 @@ pub async fn merge_by_stream(
             Some(&LOCAL_NODE_UUID.clone()),
         )
         .await?;
-        return Ok(());
+        return Ok(false);
     }
 
     // do partition by partition key
@@ -484,7 +484,7 @@ pub async fn merge_by_stream(
                 / Duration::try_hours(1).unwrap().num_microseconds().unwrap(),
         );
 
-    Ok(())
+    Ok(true)
 }
 
 /// merge some small files into one big file, upload to storage, returns the big
