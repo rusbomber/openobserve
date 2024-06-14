@@ -45,7 +45,7 @@ static WRITERS: Lazy<Vec<RwMap<WriterKey, Arc<Writer>>>> = Lazy::new(|| {
         cfg.limit.num_mem_tables + STREAM_WITH_MEMTABLE_BUCKET_MAP.len()
     } else if cfg.common.feature_per_thread_lock {
         cfg.limit.http_worker_num
-    } else{  
+    } else {
         1
     };
     let mut writers = Vec::with_capacity(writer_num);

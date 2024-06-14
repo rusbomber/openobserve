@@ -303,12 +303,12 @@ SELECT stream, date, file, deleted, min_ts, max_ts, records, original_size, comp
 SELECT stream, date, file, deleted, min_ts, max_ts, records, original_size, compressed_size, flattened
     FROM file_list 
     FORCE INDEX (file_list_stream_ts_idx) 
-    WHERE stream = ? AND min_ts <= ? AND max_ts >= ?;
+    WHERE stream = ? AND max_ts >= ? AND min_ts <= ?;
                 "#,
             )
             .bind(stream_key)
-            .bind(time_end)
             .bind(time_start)
+            .bind(time_end)
             .fetch_all(&pool)
             .await
         };

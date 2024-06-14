@@ -313,12 +313,12 @@ SELECT stream, date, file, deleted, min_ts, max_ts, records, original_size, comp
                 r#"
 SELECT stream, date, file, deleted, min_ts, max_ts, records, original_size, compressed_size, flattened
     FROM file_list 
-    WHERE stream = $1 AND min_ts <= $2 AND max_ts >= $3;
+    WHERE stream = $1 AND max_ts >= $2 AND min_ts <= $3;
                 "#,
             )
             .bind(stream_key)
-            .bind(time_end)
             .bind(time_start)
+            .bind(time_end)
             .fetch_all(&pool)
             .await
         };

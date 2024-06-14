@@ -329,20 +329,19 @@ async fn run_merge_priority(
     stream_name: &str,
 ) -> Result<bool, anyhow::Error> {
     if let Some((offset, node)) =
-        db::compact::files::get_offset_from_cache(&org_id, stream_type, &stream_name).await
+        db::compact::files::get_offset_from_cache(org_id, stream_type, stream_name).await
     {
         // check the node is still alive
-        if !node.is_empty() && LOCAL_NODE_UUID.ne(&node) {
-            if get_node_by_uuid(&node).await.is_some() {
-                return Ok(false); // not this node
-            }
+        if !node.is_empty() && LOCAL_NODE_UUID.ne(&node) && get_node_by_uuid(&node).await.is_some()
+        {
+            return Ok(false); // not this node 
         }
         // set the stream to this node
         if LOCAL_NODE_UUID.ne(&node) {
             db::compact::files::set_offset(
-                &org_id,
+                org_id,
                 stream_type,
-                &stream_name,
+                stream_name,
                 offset,
                 Some(&LOCAL_NODE_UUID.clone()),
             )
@@ -351,7 +350,7 @@ async fn run_merge_priority(
     }
 
     let worker_tx = worker_tx.clone();
-    match merge::merge_by_stream(worker_tx, &org_id, stream_type, &stream_name).await {
+    match merge::merge_by_stream(worker_tx, org_id, stream_type, stream_name).await {
         Ok(v) => Ok(v),
         Err(e) => {
             log::error!(
