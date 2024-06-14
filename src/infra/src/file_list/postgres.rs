@@ -800,7 +800,7 @@ pub async fn create_table_index() -> Result<()> {
         ),
         (
             "file_list",
-            "CREATE INDEX IF NOT EXISTS file_list_stream_ts_idx on file_list (stream, min_ts, max_ts);",
+            "CREATE INDEX IF NOT EXISTS file_list_stream_ts_idx on file_list (stream, max_ts, min_ts);",
         ),
         (
             "file_list_history",
@@ -808,7 +808,7 @@ pub async fn create_table_index() -> Result<()> {
         ),
         (
             "file_list_history",
-            "CREATE INDEX IF NOT EXISTS file_list_history_stream_ts_idx on file_list_history (stream, min_ts, max_ts);",
+            "CREATE INDEX IF NOT EXISTS file_list_history_stream_ts_idx on file_list_history (stream, max_ts, min_ts);",
         ),
         (
             "file_list_history",
