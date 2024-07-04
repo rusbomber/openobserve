@@ -1114,7 +1114,6 @@ const useLogs = () => {
               traceparent,
             })
             .then(async (res) => {
-              removeTraceId(traceId);
               searchObj.data.queryResults.partitionDetail = {
                 partitions: [],
                 partitionTotal: [],
@@ -1214,6 +1213,9 @@ const useLogs = () => {
                   );
                 }
               }
+            })
+            .finally(() => {
+              removeTraceId(traceId);
             });
         }
       } else {
@@ -1457,7 +1459,7 @@ const useLogs = () => {
         isNaN(searchObj.data.datetime.startTime)
       ) {
         const queryParams: any = router.currentRoute.value.query;
-        let currentPeriod: string = queryParams?.period || "15m";
+        const currentPeriod: string = queryParams?.period || "15m";
         const extractedDate: any = extractTimestamps(currentPeriod);
         searchObj.data.datetime.startTime = extractedDate.from;
         searchObj.data.datetime.endTime = extractedDate.to;
@@ -1780,7 +1782,6 @@ const useLogs = () => {
           // check for total records update for the partition and update pagination accordingly
           // searchObj.data.queryResults.partitionDetail.partitions.forEach(
           //   (item: any, index: number) => {
-          removeTraceId(traceId);
           searchObj.data.queryResults.scan_size = res.data.scan_size;
           searchObj.data.queryResults.took += res.data.took;
           for (const [
@@ -1835,6 +1836,9 @@ const useLogs = () => {
             searchObj.data.errorMsg = err.response.data.message;
           }
           reject(false);
+        })
+        .finally(() => {
+          removeTraceId(traceId);
         });
     });
   };
@@ -1905,7 +1909,6 @@ const useLogs = () => {
           "UI"
         )
         .then(async (res) => {
-          removeTraceId(traceId);
           if (
             res.data.hasOwnProperty("function_error") &&
             res.data.function_error != "" &&
@@ -2105,6 +2108,9 @@ const useLogs = () => {
             searchObj.data.errorMsg = err.response.data.message;
           }
           reject(false);
+        })
+        .finally(() => {
+          removeTraceId(traceId);
         });
     });
   };
@@ -2179,7 +2185,6 @@ const useLogs = () => {
               "UI"
             )
             .then(async (res) => {
-              removeTraceId(traceId);
               searchObjDebug["histogramProcessingStartTime"] =
                 performance.now();
               searchObj.loading = false;
@@ -2249,6 +2254,9 @@ const useLogs = () => {
               }
 
               reject(false);
+            })
+            .finally(() => {
+              removeTraceId(traceId);
             });
         }
       } catch (e: any) {
@@ -3101,8 +3109,6 @@ const useLogs = () => {
           traceparent,
         })
         .then((res) => {
-          removeTraceId(traceId);
-
           searchObj.loading = false;
           searchObj.data.histogram.chartParams.title = "";
           if (res.data.from > 0) {
@@ -3159,7 +3165,10 @@ const useLogs = () => {
             searchObj.data.errorMsg = customMessage;
           }
         })
-        .finally(() => (searchObj.loading = false));
+        .finally(() => {
+          removeTraceId(traceId);
+          searchObj.loading = false;
+        });
     } catch (e: any) {
       searchObj.loading = false;
       showErrorNotification("Error while fetching data");
