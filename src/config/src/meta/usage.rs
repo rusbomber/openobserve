@@ -88,6 +88,8 @@ pub struct UsageData {
     pub max_ts: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub search_type: Option<SearchEventType>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub took_wait_in_queue: Option<usize>,
 }
 
 #[derive(Hash, PartialEq, Eq)]
@@ -131,14 +133,16 @@ impl From<UsageType> for UsageEvent {
             UsageType::Bulk
             | UsageType::Json
             | UsageType::Multi
-            | UsageType::Traces
-            | UsageType::Metrics
             | UsageType::KinesisFirehose
             | UsageType::GCPSubscription
-            | UsageType::EnrichmentTable
-            | UsageType::Syslog
+            | UsageType::Logs
+            | UsageType::Traces
+            | UsageType::Metrics
+            | UsageType::PrometheusRemoteWrite
             | UsageType::JsonMetrics
-            | UsageType::Logs => UsageEvent::Ingestion,
+            | UsageType::RUM
+            | UsageType::EnrichmentTable
+            | UsageType::Syslog => UsageEvent::Ingestion,
             UsageType::Search
             | UsageType::SearchAround
             | UsageType::SearchTopNValues
@@ -151,18 +155,28 @@ impl From<UsageType> for UsageEvent {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum UsageType {
-    #[serde(rename = "logs/_bulk")]
+    #[serde(rename = "/logs/_bulk")]
     Bulk,
-    #[serde(rename = "logs/_json")]
+    #[serde(rename = "/logs/_json")]
     Json,
-    #[serde(rename = "logs/_multi")]
+    #[serde(rename = "/logs/_multi")]
     Multi,
-    #[serde(rename = "/v1/logs")]
+    #[serde(rename = "/_kinesis_firehose")]
+    KinesisFirehose,
+    #[serde(rename = "/gcp/_sub")]
+    GCPSubscription,
+    #[serde(rename = "/otlp/v1/logs")]
     Logs,
-    #[serde(rename = "/traces")]
+    #[serde(rename = "/otlp/v1/traces")]
     Traces,
-    #[serde(rename = "/v1/write")]
+    #[serde(rename = "/otlp/v1/metrics")]
     Metrics,
+    #[serde(rename = "/prometheus/v1/write")]
+    PrometheusRemoteWrite,
+    #[serde(rename = "/metrics/_json")]
+    JsonMetrics,
+    #[serde(rename = "/v1/rum")]
+    RUM,
     #[serde(rename = "/_search")]
     Search,
     #[serde(rename = "/metrics/_search")]
@@ -175,36 +189,34 @@ pub enum UsageType {
     Functions,
     #[serde(rename = "data_retention")]
     Retention,
-    #[serde(rename = "/_kinesis_firehose")]
-    KinesisFirehose,
-    #[serde(rename = "/gcp/_sub")]
-    GCPSubscription,
-    #[serde(rename = "metrics/_json")]
-    JsonMetrics,
+    #[serde(rename = "syslog")]
     Syslog,
+    #[serde(rename = "enrichment_table")]
     EnrichmentTable,
 }
 
 impl std::fmt::Display for UsageType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            UsageType::Bulk => write!(f, "logs/_bulk"),
-            UsageType::Json => write!(f, "logs/_json"),
-            UsageType::JsonMetrics => write!(f, "metrics/_json"),
-            UsageType::Multi => write!(f, "logs/_multi"),
-            UsageType::Traces => write!(f, "/traces"),
-            UsageType::Metrics => write!(f, "/v1/write"),
+            UsageType::Bulk => write!(f, "/logs/_bulk"),
+            UsageType::Json => write!(f, "/logs/_json"),
+            UsageType::Multi => write!(f, "/logs/_multi"),
+            UsageType::KinesisFirehose => write!(f, "/_kinesis_firehose"),
+            UsageType::GCPSubscription => write!(f, "/gcp/_sub"),
+            UsageType::Logs => write!(f, "/otlp/v1/logs"),
+            UsageType::Traces => write!(f, "/otlp/v1/traces"),
+            UsageType::Metrics => write!(f, "/otlp/v1/metrics"),
+            UsageType::PrometheusRemoteWrite => write!(f, "/prometheus/v1/write"),
+            UsageType::JsonMetrics => write!(f, "/metrics/_json"),
+            UsageType::RUM => write!(f, "/v1/rum"),
             UsageType::Search => write!(f, "/_search"),
-            UsageType::Functions => write!(f, "functions"),
-            UsageType::Retention => write!(f, "data_retention"),
-            UsageType::KinesisFirehose => write!(f, "_kinesis_firehose"),
-            UsageType::Syslog => write!(f, "syslog"),
-            UsageType::EnrichmentTable => write!(f, "enrichment_table"),
+            UsageType::MetricSearch => write!(f, "/metrics/_search"),
             UsageType::SearchAround => write!(f, "/_around"),
             UsageType::SearchTopNValues => write!(f, "/_values"),
-            UsageType::GCPSubscription => write!(f, "/gcp/_sub"),
-            UsageType::MetricSearch => write!(f, "/metrics/_search"),
-            UsageType::Logs => write!(f, "/v1/logs"),
+            UsageType::Functions => write!(f, "functions"),
+            UsageType::Retention => write!(f, "data_retention"),
+            UsageType::Syslog => write!(f, "syslog"),
+            UsageType::EnrichmentTable => write!(f, "enrichment_table"),
         }
     }
 }
@@ -230,6 +242,8 @@ pub struct RequestStats {
     pub search_type: Option<SearchEventType>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trace_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub took_wait_in_queue: Option<usize>,
 }
 impl Default for RequestStats {
     fn default() -> Self {
@@ -245,6 +259,7 @@ impl Default for RequestStats {
             user_email: None,
             search_type: None,
             trace_id: None,
+            took_wait_in_queue: None,
         }
     }
 }
@@ -263,6 +278,7 @@ impl From<FileMeta> for RequestStats {
             user_email: None,
             search_type: None,
             trace_id: None,
+            took_wait_in_queue: None,
         }
     }
 }

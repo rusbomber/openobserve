@@ -218,6 +218,8 @@ pub struct Response {
     pub new_start_time: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub new_end_time: Option<i64>,
+    #[serde(default)]
+    pub result_cache_ratio: usize,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default, ToSchema)]
@@ -260,6 +262,7 @@ impl Response {
             histogram_interval: None,
             new_start_time: None,
             new_end_time: None,
+            result_cache_ratio: 0,
         }
     }
 
@@ -507,7 +510,7 @@ impl From<&cluster_rpc::ScanStats> for ScanStats {
     }
 }
 
-#[derive(Hash, Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Hash, Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, ToSchema)]
 pub enum SearchEventType {
     UI,
     Dashboards,

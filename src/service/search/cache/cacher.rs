@@ -14,10 +14,11 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 use bytes::Bytes;
+use chrono::Utc;
 use config::{
     get_config,
     meta::search::Response,
-    utils::{file::scan_files, json, time::parse_str_to_timestamp_micros_as_option},
+    utils::{file::scan_files, json},
 };
 use infra::cache::{
     file_data::disk::{self, QUERY_RESULT_CACHE},
@@ -26,8 +27,9 @@ use infra::cache::{
 
 use crate::{
     common::meta::search::{CachedQueryResponse, QueryDelta},
-    service::search::sql::{
-        generate_histogram_interval, SqlMode, RE_HISTOGRAM, RE_SELECT_FROM, TS_WITH_ALIAS,
+    service::search::{
+        cache::result_utils::{get_ts_value, round_down_to_nearest_minute},
+        sql::{generate_histogram_interval, SqlMode, RE_HISTOGRAM, RE_SELECT_FROM},
     },
 };
 
@@ -59,7 +61,7 @@ pub async fn check_cache(
     if sql_mode.eq(&SqlMode::Full) && req.query.track_total_hits {
         return CachedQueryResponse::default();
     }
-    let mut result_ts_col = get_ts_col(parsed_sql, &cfg.common.column_timestamp);
+    let mut result_ts_col = get_ts_col(parsed_sql, &cfg.common.column_timestamp, is_aggregate);
     if is_aggregate && sql_mode.eq(&SqlMode::Full) && result_ts_col.is_none() {
         return CachedQueryResponse::default();
     }
@@ -82,6 +84,7 @@ pub async fn check_cache(
     }
 
     let result_ts_col = result_ts_col.unwrap();
+    let mut discard_interval = -1;
     if let Some(interval) = meta.histogram_interval {
         *file_path = format!("{}_{}_{}", file_path, interval, result_ts_col);
 
@@ -98,28 +101,9 @@ pub async fn check_cache(
             } else {
                 parsed_sql.time_range
             };
-
-        let caps = RE_HISTOGRAM.captures(origin_sql.as_str()).unwrap();
-        let attrs = caps
-            .get(1)
-            .unwrap()
-            .as_str()
-            .split(',')
-            .map(|v| v.trim().trim_matches(|v| v == '\'' || v == '"'))
-            .collect::<Vec<&str>>();
-
-        let interval = match attrs.get(1) {
-            Some(v) => match v.parse::<u16>() {
-                Ok(v) => generate_histogram_interval(q_time_range, v),
-                Err(_) => v.to_string(),
-            },
-            None => generate_histogram_interval(q_time_range, 0),
-        };
-        *origin_sql = origin_sql.replace(
-            caps.get(0).unwrap().as_str(),
-            &format!("histogram(_timestamp,'{}')", interval),
-        );
+        handle_historgram(origin_sql, q_time_range);
         req.query.sql = origin_sql.clone();
+        discard_interval = interval * 1000 * 1000; //in microseconds
     };
     if req.query.size >= 0 {
         *file_path = format!("{}_{}_{}", file_path, req.query.from, req.query.size);
@@ -134,6 +118,7 @@ pub async fn check_cache(
         file_path.to_string(),
         trace_id.to_owned(),
         result_ts_col.clone(),
+        discard_interval,
     )
     .await
     {
@@ -148,7 +133,13 @@ pub async fn check_cache(
                 log::debug!("cached response found");
                 *should_exec_query = false;
             };
-            cached_resp.deltas = search_delta;
+            if cached_resp.cached_response.total == (meta.meta.limit as usize) {
+                *should_exec_query = false;
+                cached_resp.deltas = vec![];
+            } else {
+                cached_resp.deltas = search_delta;
+            }
+
             cached_resp.cached_response.took = start.elapsed().as_millis() as usize;
             cached_resp
         }
@@ -162,12 +153,15 @@ pub async fn check_cache(
     c_resp
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn get_cached_results(
     start_time: i64,
     end_time: i64,
     is_aggregate: bool,
     file_path: &str,
     result_ts_column: &str,
+    trace_id: &str,
+    discard_interval: i64,
 ) -> Option<CachedQueryResponse> {
     let r = QUERY_RESULT_CACHE.read().await;
     let query_key = file_path.replace('/', "_");
@@ -202,13 +196,9 @@ pub async fn get_cached_results(
                     return None;
                 }
 
-                // matching_cache_meta.start_time = matching_cache_meta.start_time +
-                // discard_duration; //discard the first discard_duration of cache
-                matching_cache_meta.end_time -= discard_duration; //discard the last discard_duration of cache
-
                 let mut deltas = vec![];
-                let has_pre_cache_delta =
-                    calculate_deltas_v1(&matching_cache_meta, start_time, end_time, &mut deltas);
+
+                calculate_deltas_v1(&matching_cache_meta, start_time, end_time, &mut deltas);
 
                 let remove_hits: Vec<&QueryDelta> =
                     deltas.iter().filter(|d| d.delta_removed_hits).collect();
@@ -219,37 +209,73 @@ pub async fn get_cached_results(
                         // remove hits if time range is lesser than cached time range
                         let mut to_retain = Vec::new();
 
+                        let first_ts =
+                            get_ts_value(result_ts_column, cached_response.hits.first().unwrap());
+
+                        let last_ts =
+                            get_ts_value(result_ts_column, cached_response.hits.last().unwrap());
+
+                        let discard_ts = if discard_interval > 0 {
+                            // for histogram
+                            if first_ts < last_ts {
+                                last_ts
+                            } else {
+                                first_ts
+                            }
+                        } else if first_ts < last_ts {
+                            // non-aggregate quer
+                            let m_last_ts = round_down_to_nearest_minute(last_ts);
+                            if Utc::now().timestamp_micros() - discard_duration < last_ts {
+                                m_last_ts - discard_duration
+                            } else {
+                                matching_cache_meta.end_time
+                            }
+                        } else {
+                            let m_first_ts = round_down_to_nearest_minute(first_ts);
+                            if Utc::now().timestamp_micros() - discard_duration < m_first_ts {
+                                m_first_ts - discard_duration
+                            } else {
+                                matching_cache_meta.start_time
+                            }
+                        };
+
                         if !remove_hits.is_empty() {
                             for delta in remove_hits {
                                 for hit in &cached_response.hits {
-                                    let hit_ts = match hit.get(result_ts_column) {
-                                        Some(serde_json::Value::String(ts)) => {
-                                            parse_str_to_timestamp_micros_as_option(ts.as_str())
-                                        }
-                                        Some(serde_json::Value::Number(ts)) => ts.as_i64(),
-                                        _ => {
-                                            return None;
-                                        }
-                                    };
+                                    let hit_ts = get_ts_value(result_ts_column, hit);
 
-                                    match hit_ts {
-                                        Some(hit_ts) => {
-                                            if !(hit_ts >= delta.delta_start_time
-                                                && hit_ts < delta.delta_end_time)
-                                                && (hit_ts <= end_time && hit_ts >= start_time)
-                                                && hit_ts < matching_cache_meta.end_time
-                                            {
-                                                to_retain.push(hit.clone());
-                                            }
-                                        }
-                                        None => return None,
+                                    if !(hit_ts >= delta.delta_start_time
+                                        && hit_ts < delta.delta_end_time)
+                                        && (hit_ts <= end_time && hit_ts >= start_time)
+                                        && hit_ts < discard_ts
+                                    {
+                                        to_retain.push(hit.clone());
                                     }
                                 }
                             }
                             cached_response.hits = to_retain;
+                            cached_response.total = cached_response.hits.len();
+                            if discard_interval < 0 {
+                                matching_cache_meta.end_time = discard_ts;
+                            };
                         };
 
-                        log::info!("Get results from disk success for query key: {}", query_key);
+                        // recalculate deltas
+                        let mut deltas = vec![];
+
+                        let has_pre_cache_delta = calculate_deltas_v1(
+                            &matching_cache_meta,
+                            start_time,
+                            end_time,
+                            &mut deltas,
+                        );
+
+                        log::info!(
+                            "[trace_id {trace_id}] Get results from disk success for query key: {} with start time {} - end time {} ",
+                            query_key,
+                            matching_cache_meta.start_time,
+                            matching_cache_meta.end_time
+                        );
                         Some(CachedQueryResponse {
                             cached_response,
                             deltas,
@@ -262,7 +288,10 @@ pub async fn get_cached_results(
                         })
                     }
                     Err(e) => {
-                        log::error!("Get results from disk failed : {:?}", e);
+                        log::error!(
+                            "[trace_id {trace_id}] Get results from disk failed : {:?}",
+                            e
+                        );
                         None
                     }
                 }
@@ -360,17 +389,19 @@ pub async fn get_results(file_path: &str, file_name: &str) -> std::io::Result<St
     }
 }
 
-fn get_ts_col(parsed_sql: &config::meta::sql::Sql, ts_col: &str) -> Option<String> {
+fn get_ts_col(
+    parsed_sql: &config::meta::sql::Sql,
+    ts_col: &str,
+    is_aggregate: bool,
+) -> Option<String> {
     for (original, alias) in &parsed_sql.field_alias {
-        if TS_WITH_ALIAS.is_match(original) && alias == ts_col {
-            return Some(ts_col.to_string());
-        }
         if original.contains("histogram") {
             return Some(alias.clone());
         }
     }
-    if parsed_sql.fields.contains(&ts_col.to_owned())
-        || parsed_sql.order_by.iter().any(|v| v.0.eq(&ts_col))
+    if !is_aggregate
+        && (parsed_sql.fields.contains(&ts_col.to_owned())
+            || parsed_sql.order_by.iter().any(|v| v.0.eq(&ts_col)))
     {
         return Some(ts_col.to_string());
     }
@@ -412,4 +443,28 @@ pub async fn delete_cache(path: &str) -> std::io::Result<bool> {
         r.remove(&query_key);
     }
     Ok(true)
+}
+
+fn handle_historgram(origin_sql: &mut String, q_time_range: Option<(i64, i64)>) {
+    let caps = RE_HISTOGRAM.captures(origin_sql.as_str()).unwrap();
+    let attrs = caps
+        .get(1)
+        .unwrap()
+        .as_str()
+        .split(',')
+        .map(|v| v.trim().trim_matches(|v| v == '\'' || v == '"'))
+        .collect::<Vec<&str>>();
+
+    let interval = match attrs.get(1) {
+        Some(v) => match v.parse::<u16>() {
+            Ok(v) => generate_histogram_interval(q_time_range, v),
+            Err(_) => v.to_string(),
+        },
+        None => generate_histogram_interval(q_time_range, 0),
+    };
+
+    *origin_sql = origin_sql.replace(
+        caps.get(0).unwrap().as_str(),
+        &format!("histogram(_timestamp,'{}')", interval),
+    );
 }

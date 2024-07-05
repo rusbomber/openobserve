@@ -34,7 +34,7 @@ use datafusion::{
         datatypes::{DataType, Schema},
         record_batch::RecordBatch,
     },
-    common::{FileType, GetExt},
+    common::{Column, FileType, GetExt},
     datasource::{
         file_format::{json::JsonFormat, parquet::ParquetFormat},
         listing::{ListingOptions, ListingTableConfig, ListingTableUrl},
@@ -898,14 +898,18 @@ fn merge_rewrite_sql(
             fn_name = "sum".to_string();
         }
         if fn_name == "approx_percentile_cont" {
-            let percentile = cap
-                .get(2)
-                .unwrap()
-                .as_str()
-                .splitn(2, ',')
-                .last()
-                .unwrap()
-                .trim();
+            let re =
+                Regex::new(r"(?i)approx_percentile_cont\(.*?,\s*(\d+(?:\.\d+)?(?:,\s*\d+)?)\)")
+                    .unwrap();
+            let percentile = match re.captures(field) {
+                Some(caps) => caps.get(1).unwrap().as_str(),
+                None => {
+                    return Err(DataFusionError::Execution(
+                        "Failed to extract percentile value in approx_percentile_cont function"
+                            .to_string(),
+                    ));
+                }
+            };
             fields[i] = format!(
                 "{fn_name}(\"{}\", {}) {}",
                 schema_field, percentile, over_as
@@ -1058,7 +1062,7 @@ pub async fn merge_parquet_files(
     let query_sql = if stream_type == StreamType::Index {
         // TODO: NOT IN is not efficient, need to optimize it: NOT EXIST
         format!(
-            "SELECT * FROM tbl WHERE file_name NOT IN (SELECT file_name FROM tbl WHERE deleted is True) ORDER BY {} ASC",
+            "SELECT * FROM tbl WHERE file_name NOT IN (SELECT file_name FROM tbl WHERE deleted is True) ORDER BY {} DESC",
             cfg.common.column_timestamp
         )
     } else if cfg.limit.distinct_values_hourly
@@ -1066,12 +1070,12 @@ pub async fn merge_parquet_files(
         && stream_name == "distinct_values"
     {
         format!(
-            "SELECT MIN({}) AS {}, SUM(count) as count, field_name, field_value, filter_name, filter_value, stream_name, stream_type FROM tbl GROUP BY field_name, field_value, filter_name, filter_value, stream_name, stream_type ORDER BY {} ASC",
+            "SELECT MIN({}) AS {}, SUM(count) as count, field_name, field_value, filter_name, filter_value, stream_name, stream_type FROM tbl GROUP BY field_name, field_value, filter_name, filter_value, stream_name, stream_type ORDER BY {} DESC",
             cfg.common.column_timestamp, cfg.common.column_timestamp, cfg.common.column_timestamp
         )
     } else {
         format!(
-            "SELECT * FROM tbl ORDER BY {} ASC",
+            "SELECT * FROM tbl ORDER BY {} DESC",
             cfg.common.column_timestamp
         )
     };
@@ -1119,6 +1123,7 @@ pub fn create_session_config(search_type: &SearchType) -> Result<SessionConfig> 
         "datafusion.execution.listing_table_ignore_subdirectory",
         false,
     );
+    config = config.set_bool("datafusion.execution.split_file_groups_by_statistics", true);
     if search_type == &SearchType::Normal {
         config = config.set_bool("datafusion.execution.parquet.pushdown_filters", true);
         config = config.set_bool("datafusion.execution.parquet.reorder_filters", true);
@@ -1254,7 +1259,7 @@ pub async fn register_table(
 
     let cfg = get_config();
     // Configure listing options
-    let listing_options = match file_type {
+    let mut listing_options = match file_type {
         FileType::PARQUET => {
             let file_format = ParquetFormat::default();
             ListingOptions::new(Arc::new(file_format))
@@ -1275,6 +1280,17 @@ pub async fn register_table(
             )));
         }
     };
+
+    // specify sort columns for parquet file
+    listing_options = listing_options.with_file_sort_order(vec![vec![Expr::Sort(
+        datafusion::logical_expr::SortExpr {
+            expr: Box::new(Expr::Column(Column::new_unqualified(
+                cfg.common.column_timestamp.clone(),
+            ))),
+            asc: false,
+            nulls_first: false,
+        },
+    )]]);
 
     let schema_key = schema.hash_key();
     let prefix = if session.storage_type == StorageType::Memory {
@@ -1306,6 +1322,27 @@ pub async fn register_table(
     {
         config = config.infer_schema(&ctx.state()).await?;
     } else {
+        let timestamp_field = schema.field_with_name(&cfg.common.column_timestamp);
+        let schema = if timestamp_field.is_ok() && timestamp_field.unwrap().is_nullable() {
+            let new_fields = schema
+                .fields()
+                .iter()
+                .map(|x| {
+                    if x.name() == &cfg.common.column_timestamp {
+                        Arc::new(Field::new(
+                            cfg.common.column_timestamp.clone(),
+                            DataType::Int64,
+                            false,
+                        ))
+                    } else {
+                        x.clone()
+                    }
+                })
+                .collect::<Vec<_>>();
+            Arc::new(Schema::new(new_fields))
+        } else {
+            schema
+        };
         config = config.with_schema(schema);
     }
     let mut table = NewListingTable::try_new(config)?;
