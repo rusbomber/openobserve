@@ -40,8 +40,11 @@ use regex::Regex;
 #[cfg(feature = "enterprise")]
 use {
     crate::{
-        common::meta::user::{DBUser, RoleOrg, TokenValidationResponse, UserOrg, UserRole},
-        service::{db, users},
+        common::meta::{
+            organization::Organization,
+            user::{DBUser, RoleOrg, TokenValidationResponse, UserOrg, UserRole},
+        },
+        service::{db, organization, users},
     },
     o2_enterprise::enterprise::common::infra::config::O2_CONFIG,
 };
@@ -141,7 +144,11 @@ pub async fn process_token(
                     // this is to allow user call organization api with org
                     tuples.push(get_user_org_tuple(&user_email, &user_email));
                 }
-
+                let _ = organization::create_org(&Organization {
+                    identifier: org.name.to_owned(),
+                    name: org.name.to_owned(),
+                })
+                .await;
                 tuples_to_add.insert(org.name.to_owned(), tuples);
             }
         }
@@ -210,6 +217,8 @@ pub async fn process_token(
                 }
                 None => {
                     // The organization is not found in source_orgs, hence removed
+                    // TODO: Check if removing org from db is the right thing to do
+                    let _ = organization::remove_org(&existing_org.name.to_owned()).await;
                     orgs_removed.push(existing_org);
                 }
             }
@@ -217,6 +226,12 @@ pub async fn process_token(
 
         // Add the user to the newly added organizations
         for org in orgs_added {
+            let _ = organization::create_org(&Organization {
+                identifier: org.name.to_owned(),
+                name: org.name.to_owned(),
+            })
+            .await;
+
             match users::add_user_to_org(
                 &org.name,
                 &user_email,
