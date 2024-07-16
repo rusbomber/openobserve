@@ -43,7 +43,35 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         </div>
       </div>
       <q-separator />
-      <div class="row q-col-gutter-sm q-pt-lg q-px-lg q-my-md">
+      <div class="row q-col-gutter-sm q-px-lg q-my-md">
+        <div class="col-12 q-pb-md">
+          <app-tabs
+            style="
+              border: 1px solid #8a8a8a;
+              border-radius: 4px;
+              overflow: hidden;
+              width: fit-content;
+            "
+            :tabs="tabs"
+            v-model:active-tab="formData.type"
+          />
+        </div>
+        <div
+          v-if="formData.type === 'email' && !getFormattedTemplates.length"
+          class="flex items-center col-12 q-mb-md"
+        >
+          <div class="text-subtitle2 q-mr-sm">
+            It looks like you haven't created any Email Templates yet.
+          </div>
+          <q-btn
+            label="Create Email Template"
+            size="sm"
+            no-caps
+            color="secondary"
+            style="border-radius: 4px; font-size: 12px"
+            @click="createEmailTemplate"
+          />
+        </div>
         <div class="col-6 q-py-xs">
           <q-input
             data-test="add-destination-name-input"
@@ -82,19 +110,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           </div>
         </div>
 
-        <div class="col-12 q-pb-md">
-          <app-tabs
-            style="
-              border: 1px solid #8a8a8a;
-              border-radius: 4px;
-              overflow: hidden;
-              width: fit-content;
-            "
-            :tabs="tabs"
-            v-model:active-tab="destinationType"
-          />
-        </div>
-        <template v-if="destinationType === 'service'">
+        <template v-if="formData.type === 'web_hook'">
           <div class="col-6 q-py-xs">
             <q-input
               data-test="add-destination-url-input"
@@ -207,9 +223,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
             </div>
           </div>
         </template>
-        <template v-if="destinationType === 'email'">
+        <template v-if="formData.type === 'email'">
           <q-input
-            v-model="emails"
+            v-model="formData.emails"
             :label="t('reports.recipients') + ' *'"
             color="input-border"
             bg-color="input-bg"
@@ -285,14 +301,12 @@ const formData: Ref<DestinationData> = ref({
   skip_tls_verify: false,
   template: "",
   headers: {},
+  emails: [],
+  type: "web_hook",
 });
 const isUpdatingDestination = ref(false);
 
-const emails = ref("");
-
 const router = useRouter();
-
-const destinationType = ref("service");
 
 // TODO OK: Use UUID package instead of this and move this method in utils
 const getUUID = () => {
@@ -309,14 +323,14 @@ const apiHeaders: Ref<
 
 const tabs = computed(() => [
   {
-    label: "Service",
-    value: "service",
+    label: "Web Hook",
+    value: "web_hook",
     style: {
       width: "fit-content",
       padding: "4px 14px",
-      background: destinationType.value === "service" ? "#5960B2" : "",
+      background: formData.value.type === "web_hook" ? "#5960B2" : "",
       border: "none !important",
-      color: destinationType.value === "service" ? "#ffffff !important" : "",
+      color: formData.value.type === "web_hook" ? "#ffffff !important" : "",
     },
   },
   {
@@ -325,9 +339,9 @@ const tabs = computed(() => [
     style: {
       width: "fit-content",
       padding: "4px 14px",
-      background: destinationType.value === "email" ? "#5960B2" : "#ffffff",
+      background: formData.value.type === "email" ? "#5960B2" : "#ffffff",
       border: "none !important",
-      color: destinationType.value === "email" ? "#ffffff !important" : "",
+      color: formData.value.type === "email" ? "#ffffff !important" : "",
     },
   },
 ]);
@@ -346,6 +360,9 @@ const setupDestinationData = () => {
     formData.value.skip_tls_verify = props.destination.skip_tls_verify;
     formData.value.template = props.destination.template;
     formData.value.headers = props.destination.headers;
+    formData.value.emails = (props.destination.emails || []).join(", ");
+    formData.value.type = props.destination.type || "web_hook";
+
     if (Object.keys(formData.value.headers).length) {
       apiHeaders.value = [];
       Object.entries(formData.value.headers).forEach(([key, value]) => {
@@ -355,13 +372,22 @@ const setupDestinationData = () => {
   }
 };
 const getFormattedTemplates = computed(() =>
-  props.templates.map((template: any) => template.name)
+  props.templates
+    .filter((template: any) => {
+      if (formData.value.type === "email" && template.type === "email")
+        return true;
+      else if (formData.value.type !== "email") return true;
+    })
+    .map((template: any) => template.name)
 );
+
 const isValidDestination = computed(
   () =>
     formData.value.name &&
-    formData.value.url &&
-    formData.value.method &&
+    ((formData.value.url &&
+      formData.value.method &&
+      formData.value.type === "web_hook") ||
+      (formData.value.type === "email" && formData.value.emails.length)) &&
     formData.value.template
 );
 const saveDestination = () => {
@@ -392,9 +418,11 @@ const saveDestination = () => {
     name: formData.value.name,
   };
 
-  if (destinationType.value === "email") {
+  if (formData.value.type === "email") {
     payload["type"] = "email";
-    payload["emails"] = emails.value.split(/[;,]/).map((email) => email.trim());
+    payload["emails"] = formData.value.emails
+      .split(/[;,]/)
+      .map((email: string) => email.trim());
   }
 
   if (isUpdatingDestination.value) {
@@ -455,6 +483,17 @@ const deleteApiHeader = (header: any) => {
   if (formData.value.headers[header.key])
     delete formData.value.headers[header.key];
   if (!apiHeaders.value.length) addApiHeader();
+};
+
+const createEmailTemplate = () => {
+  router.push({
+    name: "alertTemplates",
+    query: {
+      action: "add",
+      type: "email",
+      org_identifier: store.state.selectedOrganization.identifier,
+    },
+  });
 };
 </script>
 <style lang="scss" scoped>

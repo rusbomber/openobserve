@@ -778,7 +778,8 @@
     "groupBy": "Group by",
     "row": "Row Template",
     "preview": "Preview",
-    "crontitle": "Enable Cron"
+    "crontitle": "Enable Cron",
+    "title": "Title"
   },
   "alert_templates": {
     "header": "Templates",
