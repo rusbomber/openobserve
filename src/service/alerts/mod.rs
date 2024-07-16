@@ -808,10 +808,15 @@ pub async fn send_notification(
         process_row_template(&alert.row_template, alert, rows)
     };
     let msg: String = process_dest_template(&dest.template.body, alert, rows, &rows_tpl_val).await;
+    let email_subject = if !dest.template.title.is_empty() {
+        process_dest_template(&dest.template.title, alert, rows, &rows_tpl_val).await
+    } else {
+        dest.template.name.clone()
+    };
 
     match dest.destination_type {
         DestinationType::Http => send_http_notification(dest, msg.clone()).await,
-        DestinationType::Email => send_email_notification(&alert.name, dest, msg).await,
+        DestinationType::Email => send_email_notification(&email_subject, dest, msg).await,
     }
 }
 
@@ -864,7 +869,7 @@ pub async fn send_http_notification(
 }
 
 pub async fn send_email_notification(
-    alert_name: &str,
+    email_subject: &str,
     dest: &DestinationWithTemplate,
     msg: String,
 ) -> Result<(), anyhow::Error> {
@@ -880,7 +885,7 @@ pub async fn send_email_notification(
 
     let mut email = Message::builder()
         .from(cfg.smtp.smtp_from_email.parse()?)
-        .subject(format!("Openobserve Alert - {}", alert_name));
+        .subject(format!("Openobserve Alert - {}", email_subject));
 
     for recepient in recepients {
         email = email.to(recepient.parse()?);
